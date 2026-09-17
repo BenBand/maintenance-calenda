@@ -17,7 +17,7 @@ const allowedOrigins = CLIENT_ORIGIN
   : ['http://localhost:3001'];
 
 app.use(cors({
-  origin: allowedOrigins,
+  origin: "https://maintenance-frontend-wwsg.onrender.com"
   credentials: true,
 }));
 app.use(compression());
