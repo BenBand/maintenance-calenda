@@ -33,8 +33,6 @@ async function login(req, res) {
         username: user.username,
         email: user.email,
         role: user.role,
-        department: user.department,
-        room_number: user.room_number,
       },
     });
   } catch (error) {
@@ -47,7 +45,7 @@ async function me(req, res) {
   const userId = req.user.id;
   try {
     const result = await pool.query(
-      'SELECT id, username, email, role, department, room_number FROM users WHERE id = $1',
+      'SELECT id, username, email, role FROM users WHERE id = $1',
       [userId]
     );
     if (result.rows.length === 0) {
@@ -59,8 +57,6 @@ async function me(req, res) {
       username: user.username,
       email: user.email,
       role: user.role,
-      department: user.department,
-      room_number: user.room_number,
     });
   } catch (error) {
     console.error('Get user error:', error);
@@ -113,8 +109,6 @@ async function updateProfile(req, res) {
           username: user.username,
           email: user.email,
           role: user.role,
-          department: user.department,
-          room_number: user.room_number,
         },
       });
     }
@@ -129,8 +123,6 @@ async function updateProfile(req, res) {
         username: updatedUser.username,
         email: updatedUser.email,
         role: updatedUser.role,
-        department: updatedUser.department,
-        room_number: updatedUser.room_number,
       },
     });
   } catch (error) {

@@ -8,8 +8,6 @@ async function createTables() {
       email VARCHAR(255) UNIQUE NOT NULL,
       password_hash VARCHAR(255) NOT NULL,
       role VARCHAR(50) DEFAULT 'staff' CHECK (role IN ('admin', 'manager', 'staff')),
-      department VARCHAR(255),
-      room_number VARCHAR(100),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`,
@@ -83,8 +81,6 @@ async function seedAdmin() {
   const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@lcc.gov.zm';
   const adminRole = process.env.ADMIN_ROLE || 'admin';
-  const adminDepartment = process.env.ADMIN_DEPARTMENT || 'IT';
-  const adminRoom = process.env.ADMIN_ROOM || '101';
 
   try {
     const result = await pool.query('SELECT * FROM users WHERE username = $1', [adminUsername]);
@@ -93,8 +89,8 @@ async function seedAdmin() {
       const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10;
       const passwordHash = await bcrypt.hash(adminPassword, saltRounds);
       await pool.query(
-        'INSERT INTO users (username, email, password_hash, role, department, room_number) VALUES ($1, $2, $3, $4, $5, $6)',
-        [adminUsername, adminEmail, passwordHash, adminRole, adminDepartment, adminRoom]
+        'INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4)',
+        [adminUsername, adminEmail, passwordHash, adminRole]
       );
       console.log(`Admin user seeded: ${adminUsername}`);
     } else {

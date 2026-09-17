@@ -26,10 +26,6 @@ Lusaka City Council - IT Maintenance Calendar System for laptops, desktops, netw
 
 ### 2. Setup
 
-```bash
-chmod +x scripts/*.sh
-./scripts/setup.sh
-```
 
 ### 3. Environment
 
@@ -39,42 +35,17 @@ Copy `backend/.env.example` to `backend/.env` and configure:
 - `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_EMAIL` - Admin account (seeded on startup)
 - `CLIENT_ORIGIN` - Frontend URL
 
-### 4. Start
-
-```bash
-npm run dev        # both frontend (3001) and backend (5000)
-# or
-npm run dev:backend  # backend only
-npm run dev:frontend # frontend only
-```
-
-## API Endpoints
-
-- `POST /api/auth/login` - Authenticate
-- `GET /api/auth/me` - Current user
-- `POST /api/auth/logout` - Logout
-- `PUT /api/auth/profile` - Update profile
-- `GET/POST /api/maintenance` - List/create schedules
-- `GET/PUT/DELETE /api/maintenance/:id` - CRUD schedules
-- `GET /api/maintenance/upcoming` - Upcoming schedules
-- `GET /api/maintenance/overdue` - Overdue schedules
-- `GET /api/maintenance/departments` - Unique departments
-- `GET /api/maintenance/date/:date` - Schedules by date
-- `GET/POST /api/services` - List/create service records
-- `GET/PUT/DELETE /api/services/:id` - CRUD service records
-- `GET /api/health` - Health check
 
 ## Scripts
 
 | Script | Description |
 |--------|-------------|
 | `npm run dev` | Start both frontend & backend |
-| `npm run dev:frontend` | Frontend dev server (port 3001) |
-| `npm run dev:backend` | Backend dev server (port 5000) |
+| `npm run dev:frontend` | Frontend dev server
+| `npm run dev:backend` | Backend dev server
 | `npm run build` | Build frontend for production |
 | `npm run start` | Start backend production |
 | `npm run check` | Syntax check all backend JS files |
-| `./scripts/setup.sh` | Full setup (install + check + build) |
 
 ## Roles
 
