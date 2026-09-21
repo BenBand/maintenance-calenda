@@ -59,7 +59,7 @@ export default function CalendarPage() {
           <h1 style={styles.heading}>Maintenance Calendar</h1>
           <p style={styles.subtitle}>Lusaka City Council - Schedule Management</p>
         </div>
-        {(user?.role === 'admin' || user?.role === 'manager') && (
+        {user?.role === 'admin' && (
           <button style={styles.addBtn} onClick={() => { setEditingSchedule(null); setShowForm(true); }}>+ Add Schedule</button>
         )}
       </div>
@@ -99,7 +99,7 @@ export default function CalendarPage() {
               <th style={styles.th}>Technician</th>
               <th style={styles.th}>Priority</th>
               <th style={styles.th}>Status</th>
-              {(user?.role === 'admin' || user?.role === 'manager') && <th style={styles.th}>Actions</th>}
+              {user?.role === 'admin' && <th style={styles.th}>Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -112,7 +112,7 @@ export default function CalendarPage() {
                 <td style={styles.td}>{s.technician}</td>
                 <td style={styles.td}><span style={{ ...styles.badge, backgroundColor: s.priority === 'critical' ? '#fee2e2' : s.priority === 'high' ? '#fef3c7' : s.priority === 'medium' ? '#dbeafe' : '#dcfce7', color: s.priority === 'critical' ? '#991b1b' : s.priority === 'high' ? '#92400e' : s.priority === 'medium' ? '#1e40af' : '#166534' }}>{s.priority}</span></td>
                 <td style={styles.td}><span style={{ ...styles.badge2, backgroundColor: s.status === 'completed' ? '#dcfce7' : s.status === 'cancelled' ? '#f3f4f6' : s.status === 'overdue' ? '#fee2e2' : '#dbeafe', color: s.status === 'completed' ? '#166534' : s.status === 'cancelled' ? '#6b7280' : s.status === 'overdue' ? '#991b1b' : '#1e40af' }}>{s.status.replace(/_/g, ' ')}</span></td>
-                {(user?.role === 'admin' || user?.role === 'manager') && (
+                {user?.role === 'admin' && (
                   <td style={styles.td}>
                     <button style={styles.editBtn} onClick={() => handleEdit(s)}>Edit</button>
                     <button style={styles.deleteBtn} onClick={() => handleDelete(s.id)}>Cancel</button>

@@ -7,7 +7,7 @@ async function createTables() {
       username VARCHAR(100) UNIQUE NOT NULL,
       email VARCHAR(255) UNIQUE NOT NULL,
       password_hash VARCHAR(255) NOT NULL,
-      role VARCHAR(50) DEFAULT 'staff' CHECK (role IN ('admin', 'manager', 'staff')),
+      role VARCHAR(50) DEFAULT 'admin' CHECK (role IN ('admin')),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`,
@@ -41,6 +41,20 @@ async function createTables() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS incidents (
+      id SERIAL PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      description TEXT NOT NULL,
+      department VARCHAR(255),
+      room VARCHAR(255),
+      asset_type VARCHAR(100) CHECK (asset_type IN ('laptop', 'desktop', 'network_equipment', 'printer')),
+      asset_identifier VARCHAR(255),
+      priority VARCHAR(20) DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'critical')),
+      status VARCHAR(30) DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
+      reported_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
     `CREATE TABLE IF NOT EXISTS audit_logs (
       id SERIAL PRIMARY KEY,
       user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -62,6 +76,11 @@ async function createTables() {
     'CREATE INDEX IF NOT EXISTS idx_maintenance_created_at ON maintenance_schedules(created_at DESC)',
     'CREATE INDEX IF NOT EXISTS idx_service_schedule ON service_records(schedule_id)',
     'CREATE INDEX IF NOT EXISTS idx_service_created_at ON service_records(created_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status)',
+    'CREATE INDEX IF NOT EXISTS idx_incidents_priority ON incidents(priority)',
+    'CREATE INDEX IF NOT EXISTS idx_incidents_department ON incidents(department)',
+    'CREATE INDEX IF NOT EXISTS idx_incidents_created_at ON incidents(created_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_incidents_reported_by ON incidents(reported_by)',
     'CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_logs(created_at DESC)',
     'CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id)',
     'CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)',
@@ -76,29 +95,4 @@ async function createTables() {
   console.log('Database initialization completed');
 }
 
-async function seedAdmin() {
-  const adminUsername = process.env.ADMIN_USERNAME || 'admin';
-  const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@lcc.gov.zm';
-  const adminRole = process.env.ADMIN_ROLE || 'admin';
-
-  try {
-    const result = await pool.query('SELECT * FROM users WHERE username = $1', [adminUsername]);
-    if (result.rows.length === 0) {
-      const bcrypt = require('bcrypt');
-      const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10;
-      const passwordHash = await bcrypt.hash(adminPassword, saltRounds);
-      await pool.query(
-        'INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4)',
-        [adminUsername, adminEmail, passwordHash, adminRole]
-      );
-      console.log(`Admin user seeded: ${adminUsername}`);
-    } else {
-      console.log(`Admin user already exists: ${adminUsername}`);
-    }
-  } catch (error) {
-    console.error('Seed admin error:', error);
-  }
-}
-
-module.exports = { createTables, seedAdmin };
+module.exports = { createTables };

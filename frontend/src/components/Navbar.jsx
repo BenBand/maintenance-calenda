@@ -15,9 +15,10 @@ export default function Navbar() {
         <nav style={styles.nav}>
           <Link to="/" style={styles.navLink}>Dashboard</Link>
           <Link to="/calendar" style={styles.navLink}>Calendar</Link>
-          {(user?.role === 'admin' || user?.role === 'manager') && (
-            <Link to="/records" style={styles.navLink}>Records</Link>
-          )}
+           {(user?.role === 'admin') && (
+             <Link to="/records" style={styles.navLink}>Records</Link>
+           )}
+           <Link to="/incidents" style={styles.navLink}>Incidents</Link>
           <Link to="/profile" style={styles.avatar}>{user?.username?.charAt(0).toUpperCase()}</Link>
         </nav>
       </div>

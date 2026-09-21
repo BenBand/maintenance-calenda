@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../services/auth';
 
 export default function Profile() {
+  const { user } = useAuth();
   return (
     <div>
       <h1 style={styles.heading}>Profile</h1>
@@ -9,11 +11,15 @@ export default function Profile() {
       <div style={styles.card}>
         <div style={styles.field}>
           <label style={styles.label}>Username</label>
-          <input type="text" defaultValue="user" style={styles.input} readOnly />
+          <input type="text" value={user?.username || ''} style={styles.input} readOnly />
+        </div>
+        <div style={styles.field}>
+          <label style={styles.label}>Email</label>
+          <input type="text" value={user?.email || ''} style={styles.input} readOnly />
         </div>
         <div style={styles.field}>
           <label style={styles.label}>Role</label>
-          <input type="text" defaultValue="staff" style={styles.input} readOnly />
+          <input type="text" value={user?.role || ''} style={styles.input} readOnly />
         </div>
         <Link to="/" style={styles.link}>Back to Dashboard</Link>
       </div>

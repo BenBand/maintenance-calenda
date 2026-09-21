@@ -79,5 +79,5 @@ export async function apiFetch(url, options = {}, token) {
   const res = await fetch(`${API_BASE}${url}`, { ...options, headers });
   if (res.status === 401) throw new Error('Unauthorized');
   if (res.status === 204) return null;
-  return res.json();
+  return res;
 }

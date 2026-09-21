@@ -3,14 +3,10 @@ require('dotenv').config();
 
 const ROLES = {
   ADMIN: 'admin',
-  MANAGER: 'manager',
-  STAFF: 'staff',
 };
 
 const ROLE_PERMISSIONS = {
-  [ROLES.ADMIN]: ['maintenance:read', 'maintenance:write', 'maintenance:delete', 'service:read', 'service:write', 'service:delete', 'profile:read', 'profile:update'],
-  [ROLES.MANAGER]: ['maintenance:read', 'maintenance:write', 'service:read', 'service:write', 'profile:read', 'profile:update'],
-  [ROLES.STAFF]: ['maintenance:read', 'service:read', 'profile:read', 'profile:update'],
+  [ROLES.ADMIN]: ['maintenance:read', 'maintenance:write', 'maintenance:delete', 'service:read', 'service:write', 'service:delete', 'incident:read', 'incident:write', 'incident:delete', 'profile:read', 'profile:update'],
 };
 
 function authenticateToken(req, res, next) {

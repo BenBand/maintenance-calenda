@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from './services/auth';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const CalendarPage = lazy(() => import('./pages/CalendarPage'));
 const RecordsPage = lazy(() => import('./pages/RecordsPage'));
+const IncidentsPage = lazy(() => import('./pages/IncidentsPage'));
 const Profile = lazy(() => import('./pages/Profile'));
 
 function ProtectedLayout() {
@@ -35,6 +36,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/records" element={<RecordsPage />} />
+            <Route path="/incidents" element={<IncidentsPage />} />
             <Route path="/profile" element={<Profile />} />
           </Route>
         </Routes>

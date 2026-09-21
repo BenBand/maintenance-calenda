@@ -65,7 +65,7 @@ export default function Dashboard() {
           <h1 style={styles.heading}>Dashboard</h1>
           <p style={styles.subtitle}>Welcome, {user?.username}</p>
         </div>
-        {(user?.role === 'admin' || user?.role === 'manager') && (
+        {user?.role === 'admin' && (
           <button style={styles.addBtn} onClick={() => setShowAddForm(true)}>+ Add Schedule</button>
         )}
       </div>
@@ -84,7 +84,7 @@ export default function Dashboard() {
               <div style={styles.alertDetail}>Date: {s.date} | Dept: {s.department} | Technician: {s.technician}</div>
               <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                 <button style={styles.actionBtn} onClick={() => { setSelectedSchedule(s); setShowServiceForm(true); }}>Service Now</button>
-                {(user?.role === 'admin' || user?.role === 'manager') && <button style={styles.deleteBtn} onClick={() => handleDelete(s.id)}>Cancel</button>}
+                {user?.role === 'admin' && <button style={styles.deleteBtn} onClick={() => handleDelete(s.id)}>Cancel</button>}
               </div>
             </div>
           ))}

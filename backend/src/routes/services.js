@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { createServiceRecord, getServiceRecords, getServiceRecordById, updateServiceRecord, deleteServiceRecord } = require('../controllers/serviceController');
-const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 router.use(authenticateToken);
 

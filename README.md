@@ -9,6 +9,7 @@ Lusaka City Council - IT Maintenance Calendar System for laptops, desktops, netw
 - Month calendar with event markers and day details
 - Add/edit/cancel maintenance schedules
 - Service maintenance form with work performed, outcome, follow-up, signature, signer name/date
+- Report and track maintenance incidents with status and priority
 - List/filter/search maintenance records
 
 ## Tech Stack
@@ -49,9 +50,7 @@ Copy `backend/.env.example` to `backend/.env` and configure:
 
 ## Roles
 
-- **admin**: Full access to schedules, service records, and maintenance records
-- **manager**: Read/write schedules, service records, view maintenance records
-- **staff**: Read schedules and service records
+- **admin**: Full access to schedules, service records, maintenance records, and incidents
 
 ## Asset Types
 

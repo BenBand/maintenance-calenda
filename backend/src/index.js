@@ -3,11 +3,11 @@ const cors = require('cors');
 const compression = require('compression');
 const path = require('path');
 require('dotenv').config();
-const { createTables, seedAdmin } = require('./models/tables');
 
 const authRoutes = require('./routes/auth');
 const maintenanceRoutes = require('./routes/maintenance');
 const serviceRoutes = require('./routes/services');
+const incidentRoutes = require('./routes/incidents');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -27,6 +27,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/services', serviceRoutes);
+app.use('/api/incidents', incidentRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -45,8 +46,6 @@ app.get('*', (req, res, next) => {
 });
 
 async function startServer() {
-  await createTables();
-  await seedAdmin();
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
   });

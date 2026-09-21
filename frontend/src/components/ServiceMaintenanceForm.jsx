@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export default function ServiceMaintenanceForm({ schedule, onSubmit, onCancel }) {
   const [form, setForm] = useState({
