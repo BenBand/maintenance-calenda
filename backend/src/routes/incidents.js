@@ -3,14 +3,16 @@ const router = express.Router();
 const {
   createIncident, getAllIncidents, getIncidentById, updateIncident, deleteIncident,
 } = require('../controllers/incidentController');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { csrfProtection } = require('../middleware/csrf');
+const { incidentValidation, idParamValidation } = require('../middleware/validate');
 
-router.use(authenticateToken);
+router.use(authenticateToken, csrfProtection);
 
-router.get('/', getAllIncidents);
-router.get('/:id', getIncidentById);
-router.post('/', createIncident);
-router.put('/:id', updateIncident);
-router.delete('/:id', deleteIncident);
+router.get('/', requirePermission('incident:read'), getAllIncidents);
+router.get('/:id', requirePermission('incident:read'), idParamValidation, getIncidentById);
+router.post('/', requirePermission('incident:write'), incidentValidation, createIncident);
+router.put('/:id', requirePermission('incident:write'), idParamValidation, incidentValidation, updateIncident);
+router.delete('/:id', requirePermission('incident:delete'), idParamValidation, deleteIncident);
 
 module.exports = router;

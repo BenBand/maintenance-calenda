@@ -6,7 +6,7 @@ const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 const STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
 
 export default function IncidentsPage() {
-  const { token, user } = useAuth();
+  const { token, csrfToken, user } = useAuth();
   const [incidents, setIncidents] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -20,7 +20,7 @@ export default function IncidentsPage() {
 
   const loadIncidents = async () => {
     try {
-      const res = await apiFetch('/incidents', {}, token);
+      const res = await apiFetch('/incidents', {}, token, csrfToken);
       if (res.ok) {
         const data = await res.json();
         setIncidents(data.data || data);
@@ -30,15 +30,20 @@ export default function IncidentsPage() {
 
   const loadDepartments = async () => {
     try {
-      const res = await apiFetch('/maintenance/departments', {}, token);
+      const res = await apiFetch('/maintenance/departments', {}, token, csrfToken);
       if (res.ok) setDepartments(await res.json());
     } catch (err) { console.error('Failed to load departments', err); }
   };
 
   const validate = () => {
     const e = {};
-    if (!form.title) e.title = 'Title is required';
-    if (!form.description) e.description = 'Description is required';
+    if (!form.title || !form.title.trim()) e.title = 'Title is required';
+    else if (form.title.length > 255) e.title = 'Title must be 255 characters or fewer';
+    if (!form.description || !form.description.trim()) e.description = 'Description is required';
+    else if (form.description.length > 2000) e.description = 'Description must be 2000 characters or fewer';
+    if (form.room && form.room.length > 255) e.room = 'Room must be 255 characters or fewer';
+    if (form.asset_identifier && form.asset_identifier.length > 255) e.asset_identifier = 'Asset identifier must be 255 characters or fewer';
+    if (form.department && form.department.length > 255) e.department = 'Department must be 255 characters or fewer';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -49,9 +54,9 @@ export default function IncidentsPage() {
     setLoading(true);
     try {
       if (editingId) {
-        await apiFetch(`/incidents/${editingId}`, { method: 'PUT', body: JSON.stringify(form) }, token);
-      } else {
-        await apiFetch('/incidents', { method: 'POST', body: JSON.stringify(form) }, token);
+         await apiFetch(`/incidents/${editingId}`, { method: 'PUT', body: JSON.stringify(form) }, token, csrfToken);
+       } else {
+         await apiFetch('/incidents', { method: 'POST', body: JSON.stringify(form) }, token, csrfToken);
       }
       setShowForm(false);
       setEditingId(null);
@@ -71,14 +76,14 @@ export default function IncidentsPage() {
   const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to delete this incident?')) return;
     try {
-      const res = await apiFetch(`/incidents/${id}`, { method: 'DELETE' }, token);
+      const res = await apiFetch(`/incidents/${id}`, { method: 'DELETE' }, token, csrfToken);
       if (res) { loadIncidents(); }
     } catch (err) { console.error('Failed to delete incident', err); }
   };
 
   const handleQuickStatus = async (inc, newStatus) => {
     try {
-      await apiFetch(`/incidents/${inc.id}`, { method: 'PUT', body: JSON.stringify({ status: newStatus }) }, token);
+      await apiFetch(`/incidents/${inc.id}`, { method: 'PUT', body: JSON.stringify({ status: newStatus }) }, token, csrfToken);
       loadIncidents();
     } catch (err) { console.error('Failed to update status', err); }
   };

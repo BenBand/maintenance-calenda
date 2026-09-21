@@ -14,9 +14,14 @@ export default function MaintenanceForm({ initialData, onSubmit, onCancel, submi
   const validate = () => {
     const e = {};
     if (!form.date) e.date = 'Date is required';
-    if (!form.department) e.department = 'Department is required';
-    if (!form.room) e.room = 'Room is required';
-    if (!form.technician) e.technician = 'Technician is required';
+    if (!form.department || !form.department.trim()) e.department = 'Department is required';
+    else if (form.department.length > 255) e.department = 'Must be 255 characters or fewer';
+    if (!form.room || !form.room.trim()) e.room = 'Room is required';
+    else if (form.room.length > 255) e.room = 'Must be 255 characters or fewer';
+    if (!form.technician || !form.technician.trim()) e.technician = 'Technician is required';
+    else if (form.technician.length > 255) e.technician = 'Must be 255 characters or fewer';
+    if (form.asset_identifier && form.asset_identifier.length > 255) e.asset_identifier = 'Must be 255 characters or fewer';
+    if (form.description && form.description.length > 2000) e.description = 'Must be 2000 characters or fewer';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -47,14 +52,14 @@ export default function MaintenanceForm({ initialData, onSubmit, onCancel, submi
         </div>
         <div style={styles.half}>
           <label style={styles.label}>Department *</label>
-          <input type="text" value={form.department} onChange={(e) => handleChange('department', e.target.value)} style={style('department')} placeholder="e.g. IT, Finance, HR" required />
+            <input type="text" value={form.department} onChange={(e) => handleChange('department', e.target.value.slice(0, 255))} style={style('department')} placeholder="e.g. IT, Finance, HR" required />
           {errors.department && <span style={styles.errorText}>{errors.department}</span>}
         </div>
       </div>
       <div style={styles.row}>
         <div style={styles.half}>
           <label style={styles.label}>Room *</label>
-          <input type="text" value={form.room} onChange={(e) => handleChange('room', e.target.value)} style={style('room')} required />
+            <input type="text" value={form.room} onChange={(e) => handleChange('room', e.target.value.slice(0, 255))} style={style('room')} required />
           {errors.room && <span style={styles.errorText}>{errors.room}</span>}
         </div>
         <div style={styles.half}>
@@ -67,18 +72,18 @@ export default function MaintenanceForm({ initialData, onSubmit, onCancel, submi
       <div style={styles.row}>
         <div style={styles.half}>
           <label style={styles.label}>Asset Identifier</label>
-          <input type="text" value={form.asset_identifier} onChange={(e) => handleChange('asset_identifier', e.target.value)} style={style('asset_identifier')} placeholder="Serial no, tag, etc." />
+            <input type="text" value={form.asset_identifier} onChange={(e) => handleChange('asset_identifier', e.target.value.slice(0, 255))} style={style('asset_identifier')} placeholder="Serial no, tag, etc." />
         </div>
         <div style={styles.half}>
           <label style={styles.label}>Technician *</label>
-          <input type="text" value={form.technician} onChange={(e) => handleChange('technician', e.target.value)} style={style('technician')} required />
+            <input type="text" value={form.technician} onChange={(e) => handleChange('technician', e.target.value.slice(0, 255))} style={style('technician')} required />
           {errors.technician && <span style={styles.errorText}>{errors.technician}</span>}
         </div>
       </div>
       <div style={styles.row}>
         <div style={styles.half}>
           <label style={styles.label}>Description</label>
-          <textarea value={form.description} onChange={(e) => handleChange('description', e.target.value)} style={styles.textarea} placeholder="Describe the maintenance work" rows={3} />
+            <textarea value={form.description} onChange={(e) => handleChange('description', e.target.value.slice(0, 2000))} style={styles.textarea} placeholder="Describe the maintenance work" rows={3} />
         </div>
         <div style={styles.half}>
           <label style={styles.label}>Priority</label>

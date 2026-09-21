@@ -5,7 +5,7 @@ import ServiceMaintenanceForm from '../components/ServiceMaintenanceForm';
 import { apiFetch } from '../services/auth';
 
 export default function RecordsPage() {
-  const { token, user } = useAuth();
+  const { token, csrfToken, user } = useAuth();
   const [records, setRecords] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [search, setSearch] = useState('');
@@ -18,14 +18,14 @@ export default function RecordsPage() {
 
   const loadRecords = async () => {
     try {
-      const res = await apiFetch('/services', {}, token);
+      const res = await apiFetch('/services', {}, token, csrfToken);
       if (res.ok) setRecords(await res.json());
     } catch (err) { console.error('Failed to load records', err); }
   };
 
   const loadSchedules = async () => {
     try {
-      const res = await apiFetch('/maintenance', {}, token);
+      const res = await apiFetch('/maintenance', {}, token, csrfToken);
       if (res.ok) setSchedules(await res.json());
     } catch (err) { console.error('Failed to load schedules', err); }
   };

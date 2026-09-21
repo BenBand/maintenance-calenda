@@ -2,10 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { login, me, logout, updateProfile } = require('../controllers/authController');
 const { authenticateToken } = require('../middleware/auth');
+const { csrfProtection } = require('../middleware/csrf');
+const { loginLimiter } = require('../middleware/rateLimits');
+const { loginValidation, profileUpdateValidation } = require('../middleware/validate');
 
-router.post('/login', login);
-router.get('/me', authenticateToken, me);
-router.post('/logout', authenticateToken, logout);
-router.put('/profile', authenticateToken, updateProfile);
+router.post('/login', loginLimiter, loginValidation, login);
+router.get('/me', authenticateToken, csrfProtection, me);
+router.post('/logout', authenticateToken, csrfProtection, logout);
+router.put('/profile', authenticateToken, csrfProtection, profileUpdateValidation, updateProfile);
 
 module.exports = router;

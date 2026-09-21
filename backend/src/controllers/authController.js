@@ -2,6 +2,7 @@ const pool = require('../config/database');
 const { hashPassword, comparePassword } = require('../utils/bcrypt');
 const jwt = require('jsonwebtoken');
 const { logMaintenanceAudit } = require('../middleware/audit');
+const { generateCSRFToken } = require('../middleware/csrf');
 
 async function login(req, res) {
   const { username, password } = req.body;
@@ -18,16 +19,29 @@ async function login(req, res) {
     if (!isValid) {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
+
+    const csrfToken = generateCSRFToken();
+
     const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
+      { id: user.id, username: user.username, role: user.role, csrfToken },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
     );
+
     setImmediate(() => {
-      logMaintenanceAudit(req, 'LOGIN', 'auth', user.id, { username: user.username, role: user.role }, user.id);
+      logMaintenanceAudit(
+        req,
+        'LOGIN',
+        'auth',
+        user.id,
+        { username: user.username, role: user.role },
+        user.id
+      );
     });
+
     res.json({
       token,
+      csrfToken,
       user: {
         id: user.id,
         username: user.username,
@@ -57,6 +71,7 @@ async function me(req, res) {
       username: user.username,
       email: user.email,
       role: user.role,
+      csrfToken: req.user.csrfToken,
     });
   } catch (error) {
     console.error('Get user error:', error);
@@ -109,6 +124,7 @@ async function updateProfile(req, res) {
           username: user.username,
           email: user.email,
           role: user.role,
+          csrfToken: req.user.csrfToken,
         },
       });
     }
@@ -123,6 +139,7 @@ async function updateProfile(req, res) {
         username: updatedUser.username,
         email: updatedUser.email,
         role: updatedUser.role,
+        csrfToken: req.user.csrfToken,
       },
     });
   } catch (error) {

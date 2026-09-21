@@ -6,7 +6,7 @@ import MaintenanceForm from '../components/MaintenanceForm';
 import { apiFetch } from '../services/auth';
 
 export default function CalendarPage() {
-  const { token, user } = useAuth();
+  const { token, csrfToken, user } = useAuth();
   const navigate = useNavigate();
   const [schedules, setSchedules] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -20,7 +20,7 @@ export default function CalendarPage() {
 
   const loadSchedules = async () => {
     try {
-      const res = await apiFetch('/maintenance', {}, token);
+      const res = await apiFetch('/maintenance', {}, token, csrfToken);
       if (res.ok) {
         const data = await res.json();
         setSchedules(data.data || data);
@@ -30,7 +30,7 @@ export default function CalendarPage() {
 
   const loadDepartments = async () => {
     try {
-      const res = await apiFetch('/maintenance/departments', {}, token);
+      const res = await apiFetch('/maintenance/departments', {}, token, csrfToken);
       if (res.ok) setDepartments(await res.json());
     } catch (err) { console.error('Failed to load departments', err); }
   };
@@ -45,7 +45,7 @@ export default function CalendarPage() {
   const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to cancel this schedule?')) return;
     try {
-      const res = await apiFetch(`/maintenance/${id}`, { method: 'DELETE' }, token);
+      const res = await apiFetch(`/maintenance/${id}`, { method: 'DELETE' }, token, csrfToken);
       if (res.ok) { loadSchedules(); }
     } catch (err) { console.error('Failed to delete', err); }
   };
@@ -131,9 +131,9 @@ export default function CalendarPage() {
               initialData={editingSchedule}
               onSubmit={async (form) => {
                 if (editingSchedule) {
-                  await apiFetch(`/maintenance/${editingSchedule.id}`, { method: 'PUT', body: JSON.stringify(form) }, token);
+                  await apiFetch(`/maintenance/${editingSchedule.id}`, { method: 'PUT', body: JSON.stringify(form) }, token, csrfToken);
                 } else {
-                  await apiFetch('/maintenance', { method: 'POST', body: JSON.stringify(form) }, token);
+                  await apiFetch('/maintenance', { method: 'POST', body: JSON.stringify(form) }, token, csrfToken);
                 }
                 setShowForm(false);
                 setEditingSchedule(null);

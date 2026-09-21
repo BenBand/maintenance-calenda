@@ -13,6 +13,18 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    if (!username.trim() || !password) {
+      setError('Username and password are required');
+      return;
+    }
+    if (username.length > 100) {
+      setError('Username must be 100 characters or fewer');
+      return;
+    }
+    if (password.length > 255) {
+      setError('Password must be 255 characters or fewer');
+      return;
+    }
     setLoading(true);
     try {
       await login(username, password);

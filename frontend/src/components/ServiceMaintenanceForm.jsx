@@ -14,8 +14,12 @@ export default function ServiceMaintenanceForm({ schedule, onSubmit, onCancel })
 
   const validate = () => {
     const e = {};
-    if (!form.work_performed) e.work_performed = 'Work performed is required';
-    if (!form.signer_name) e.signer_name = 'Signer name is required';
+    if (!form.work_performed || !form.work_performed.trim()) e.work_performed = 'Work performed is required';
+    else if (form.work_performed.length > 5000) e.work_performed = 'Must be 5000 characters or fewer';
+    if (!form.signer_name || !form.signer_name.trim()) e.signer_name = 'Signer name is required';
+    else if (form.signer_name.length > 255) e.signer_name = 'Must be 255 characters or fewer';
+    if (form.outcome && form.outcome.length > 2000) e.outcome = 'Must be 2000 characters or fewer';
+    if (form.follow_up && form.follow_up.length > 2000) e.follow_up = 'Must be 2000 characters or fewer';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -43,23 +47,23 @@ export default function ServiceMaintenanceForm({ schedule, onSubmit, onCancel })
       </div>
       <div style={styles.field}>
         <label style={styles.label}>Work Performed *</label>
-        <textarea value={form.work_performed} onChange={(e) => handleChange('work_performed', e.target.value)} style={styles.textarea} placeholder="Describe the work performed" rows={4} required />
+        <textarea value={form.work_performed} onChange={(e) => handleChange('work_performed', e.target.value.slice(0, 5000))} style={styles.textarea} placeholder="Describe the work performed" rows={4} required />
         {errors.work_performed && <span style={styles.errorText}>{errors.work_performed}</span>}
       </div>
       <div style={styles.row}>
         <div style={styles.half}>
           <label style={styles.label}>Outcome</label>
-          <input type="text" value={form.outcome} onChange={(e) => handleChange('outcome', e.target.value)} style={style('outcome')} placeholder="Result of maintenance" />
+          <input type="text" value={form.outcome} onChange={(e) => handleChange('outcome', e.target.value.slice(0, 2000))} style={style('outcome')} placeholder="Result of maintenance" />
         </div>
         <div style={styles.half}>
           <label style={styles.label}>Follow-up</label>
-          <input type="text" value={form.follow_up} onChange={(e) => handleChange('follow_up', e.target.value)} style={style('follow_up')} placeholder="Any follow-up actions" />
+          <input type="text" value={form.follow_up} onChange={(e) => handleChange('follow_up', e.target.value.slice(0, 2000))} style={style('follow_up')} placeholder="Any follow-up actions" />
         </div>
       </div>
       <div style={styles.row}>
         <div style={styles.half}>
           <label style={styles.label}>Signer Name *</label>
-          <input type="text" value={form.signer_name} onChange={(e) => handleChange('signer_name', e.target.value)} style={style('signer_name')} required />
+          <input type="text" value={form.signer_name} onChange={(e) => handleChange('signer_name', e.target.value.slice(0, 255))} style={style('signer_name')} required />
           {errors.signer_name && <span style={styles.errorText}>{errors.signer_name}</span>}
         </div>
         <div style={styles.half}>

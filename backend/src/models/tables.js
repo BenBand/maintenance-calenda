@@ -62,7 +62,7 @@ async function createTables() {
       entity_type VARCHAR(100) NOT NULL,
       entity_id INTEGER,
       details JSONB,
-      ip_address VARCHAR(45),
+      ip_address VARCHAR(255),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`,
   ];

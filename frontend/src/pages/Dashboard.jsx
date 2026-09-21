@@ -5,7 +5,7 @@ import { apiFetch } from '../services/auth';
 import ServiceMaintenanceForm from '../components/ServiceMaintenanceForm';
 
 export default function Dashboard() {
-  const { user, token } = useAuth();
+  const { token, csrfToken, user } = useAuth();
   const [schedules, setSchedules] = useState([]);
   const [upcoming, setUpcoming] = useState([]);
   const [overdue, setOverdue] = useState([]);
@@ -21,10 +21,10 @@ export default function Dashboard() {
   const loadData = async () => {
     try {
       const [allRes, upRes, overRes, svcRes] = await Promise.all([
-        apiFetch('/maintenance', {}, token),
-        apiFetch('/maintenance/upcoming', {}, token),
-        apiFetch('/maintenance/overdue', {}, token),
-        apiFetch('/services', {}, token),
+        apiFetch('/maintenance', {}, token, csrfToken),
+        apiFetch('/maintenance/upcoming', {}, token, csrfToken),
+        apiFetch('/maintenance/overdue', {}, token, csrfToken),
+        apiFetch('/services', {}, token, csrfToken),
       ]);
       if (allRes.ok) setSchedules(await allRes.json());
       if (upRes.ok) setUpcoming(await upRes.json());
@@ -38,23 +38,27 @@ export default function Dashboard() {
   const overdueData = Array.isArray(overdue) ? overdue : (overdue?.data || []);
   const recordsData = Array.isArray(serviceRecords) ? serviceRecords : (serviceRecords?.data || []);
 
+  const validateForm = () => {
+    const e = {};
+    if (!formData.date) e.date = 'Date is required';
+    if (!formData.department) e.department = 'Department is required';
+    if (!formData.room) e.room = 'Room is required';
+    if (!formData.technician) e.technician = 'Technician is required';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
   const handleAddSubmit = async (e) => {
     e.preventDefault();
-    const e2 = {};
-    if (!formData.date) e2.date = 'Required';
-    if (!formData.department) e2.department = 'Required';
-    if (!formData.room) e2.room = 'Required';
-    if (!formData.technician) e2.technician = 'Required';
-    setErrors(e2);
-    if (Object.keys(e2).length > 0) return;
-    const res = await apiFetch('/maintenance', { method: 'POST', body: JSON.stringify(formData) }, token);
-    if (res.ok) { setShowAddForm(false); setFormData({ date: '', department: '', room: '', asset_type: 'laptop', asset_identifier: '', description: '', technician: '', priority: 'medium', reminder_days: '1', status: 'scheduled' }); loadData(); }
+    if (!validateForm()) return;
+    const res = await apiFetch('/maintenance', { method: 'POST', body: JSON.stringify(formData) }, token, csrfToken);
+    if (res.ok) { setShowAddForm(false); setFormData({ date: '', department: '', room: '', asset_type: 'laptop', asset_identifier: '', description: '', technician: '', priority: 'medium', reminder_days: '1', status: 'scheduled' }); setErrors({}); loadData(); }
   };
 
   const handleDelete = async (id) => {
     if (!confirm('Are you sure?')) return;
     try {
-      const res = await apiFetch(`/maintenance/${id}`, { method: 'DELETE' }, token);
+      const res = await apiFetch(`/maintenance/${id}`, { method: 'DELETE' }, token, csrfToken);
       if (res.ok) loadData();
     } catch (err) { console.error('Failed to delete', err); }
   };
@@ -151,7 +155,7 @@ export default function Dashboard() {
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <h3 style={styles.modalTitle}>Service Maintenance - {selectedSchedule.description || selectedSchedule.asset_type}</h3>
             <ServiceMaintenanceForm schedule={selectedSchedule} onSubmit={async (form) => {
-              const res = await apiFetch('/services', { method: 'POST', body: JSON.stringify(form) }, token);
+              const res = await apiFetch('/services', { method: 'POST', body: JSON.stringify(form) }, token, csrfToken);
               if (res.ok) { setShowServiceForm(false); setSelectedSchedule(null); loadData(); }
             }} onCancel={() => { setShowServiceForm(false); setSelectedSchedule(null); }} />
           </div>
