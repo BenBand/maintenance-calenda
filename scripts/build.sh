@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-cd "$(dirname "$0")"
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "=== Building frontend ==="
-cd frontend && npm run build && cd ..
+cd "$PROJECT_DIR/frontend" && npm run build && cd "$PROJECT_DIR"
 
 echo "=== Build complete ==="

@@ -36,4 +36,4 @@ coverage/
 *.pem
 .cache/
 
-backend/database/schema.sql
+# backend/database/schema.sql

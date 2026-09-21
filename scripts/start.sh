@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-cd "$(dirname "$0")"
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "=== Starting backend server ==="
-cd backend && npm start && cd ..
+cd "$PROJECT_DIR/backend" && npm start && cd "$PROJECT_DIR"

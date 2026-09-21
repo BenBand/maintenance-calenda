@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../services/auth';
 import { apiFetch } from '../services/auth';
+import ServiceMaintenanceForm from '../components/ServiceMaintenanceForm';
 
 export default function Dashboard() {
   const { user, token } = useAuth();
@@ -149,7 +150,7 @@ export default function Dashboard() {
         <div style={styles.modalOverlay} onClick={() => { setShowServiceForm(false); setSelectedSchedule(null); }}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <h3 style={styles.modalTitle}>Service Maintenance - {selectedSchedule.description || selectedSchedule.asset_type}</h3>
-            <ServiceRecordForm schedule={selectedSchedule} onSubmit={async (form) => {
+            <ServiceMaintenanceForm schedule={selectedSchedule} onSubmit={async (form) => {
               const res = await apiFetch('/services', { method: 'POST', body: JSON.stringify(form) }, token);
               if (res.ok) { setShowServiceForm(false); setSelectedSchedule(null); loadData(); }
             }} onCancel={() => { setShowServiceForm(false); setSelectedSchedule(null); }} />
@@ -157,40 +158,6 @@ export default function Dashboard() {
         </div>
       )}
     </div>
-  );
-}
-
-function ServiceRecordForm({ schedule, onSubmit, onCancel }) {
-  const [form, setForm] = useState({ schedule_id: schedule?.id || '', work_performed: '', outcome: '', follow_up: '', signer_name: '', signer_date: '' });
-  const [errors, setErrors] = useState({});
-
-  const validate = () => {
-    const e = {};
-    if (!form.work_performed) e.work_performed = 'Required';
-    if (!form.signer_name) e.signer_name = 'Required';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleChange = (field, value) => { setForm({...form, [field]: value}); if (errors[field]) setErrors({...errors, [field]: null}); };
-
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); if (!validate()) return; onSubmit(form); }}>
-      <div style={styles.infoBox}>Schedule: {schedule?.description || `${schedule?.asset_type} - ${schedule?.room}`} | Date: {schedule?.date} | Tech: {schedule?.technician}</div>
-      <div style={styles.field}><label style={styles.label}>Work Performed *</label><textarea value={form.work_performed} onChange={(e) => handleChange('work_performed', e.target.value)} style={styles.textarea} placeholder="Describe work performed" rows={3} required />{errors.work_performed && <span style={styles.errorText}>{errors.work_performed}</span>}</div>
-      <div style={styles.row}>
-        <div style={styles.half}><label style={styles.label}>Outcome</label><input type="text" value={form.outcome} onChange={(e) => handleChange('outcome', e.target.value)} style={styles.input} /></div>
-        <div style={styles.half}><label style={styles.label}>Follow-up</label><input type="text" value={form.follow_up} onChange={(e) => handleChange('follow_up', e.target.value)} style={styles.input} /></div>
-      </div>
-      <div style={styles.row}>
-        <div style={styles.half}><label style={styles.label}>Signer Name *</label><input type="text" value={form.signer_name} onChange={(e) => handleChange('signer_name', e.target.value)} style={{ ...styles.input, borderColor: errors.signer_name ? '#dc2626' : '#d1d5db' }} required />{errors.signer_name && <span style={styles.errorText}>{errors.signer_name}</span>}</div>
-        <div style={styles.half}><label style={styles.label}>Signer Date</label><input type="date" value={form.signer_date} onChange={(e) => handleChange('signer_date', e.target.value)} style={styles.input} /></div>
-      </div>
-      <div style={styles.actions}>
-        <button type="submit" style={styles.submitBtn}>Sign & Complete</button>
-        <button type="button" onClick={onCancel} style={styles.cancelBtn}>Cancel</button>
-      </div>
-    </form>
   );
 }
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-cd "$(dirname "$0")"
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "=== Starting Maintenance Calendar ==="
 echo "=== Backend will start on port 5000 ==="
 echo "=== Frontend will start on port 3001 ==="
 
-npm run dev
+cd "$PROJECT_DIR" && npm run dev
