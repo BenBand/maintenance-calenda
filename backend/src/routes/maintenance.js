@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   createSchedule, getAllSchedules, getScheduleById, updateSchedule, deleteSchedule,
-  getUpcoming, getOverdue, getSchedulesByDate, getDepartments,
+  getUpcoming, getOverdue, getSchedulesByDate, getDepartments, generateRecurrences,
 } = require('../controllers/maintenanceController');
 const { authenticateToken, requirePermission } = require('../middleware/auth');
 const { csrfProtection } = require('../middleware/csrf');
@@ -22,5 +22,6 @@ router.get('/:id', requirePermission('maintenance:read'), idParamValidation, get
 router.post('/', requirePermission('maintenance:write'), maintenanceScheduleValidation, createSchedule);
 router.put('/:id', requirePermission('maintenance:write'), idParamValidation, maintenanceScheduleValidation, updateSchedule);
 router.delete('/:id', requirePermission('maintenance:delete'), idParamValidation, deleteSchedule);
+router.post('/:id/generate-recurrences', requirePermission('maintenance:write'), idParamValidation, generateRecurrences);
 
 module.exports = router;

@@ -1,8 +1,73 @@
+const crypto = require('crypto');
 const pool = require('../config/database');
 const { hashPassword, comparePassword } = require('../utils/bcrypt');
 const jwt = require('jsonwebtoken');
 const { logMaintenanceAudit } = require('../middleware/audit');
 const { generateCSRFToken } = require('../middleware/csrf');
+
+function publicUser(user) {
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    role: user.role,
+  };
+}
+
+function hashRefreshToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function createRefreshToken() {
+  return crypto.randomBytes(64).toString('hex');
+}
+
+function getRefreshTokenLifetimeMs() {
+  const match = /^(\d+)(s|m|h|d)$/.exec(process.env.JWT_REFRESH_EXPIRES_IN || '30d');
+  if (!match) return 30 * 24 * 60 * 60 * 1000;
+  const multipliers = { s: 1000, m: 60 * 1000, h: 60 * 60 * 1000, d: 24 * 60 * 60 * 1000 };
+  return Number(match[1]) * multipliers[match[2]];
+}
+
+function createAccessToken(user, csrfToken) {
+  return jwt.sign(
+    { id: user.id, username: user.username, role: user.role, csrfToken, type: 'access' },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
+  );
+}
+
+async function issueSession(req, user) {
+  const csrfToken = generateCSRFToken();
+  const token = createAccessToken(user, csrfToken);
+  const refreshToken = createRefreshToken();
+  const refreshTokenExpiresAt = new Date(Date.now() + getRefreshTokenLifetimeMs());
+
+  await pool.query(
+    'UPDATE users SET refresh_token = $1, refresh_token_expires_at = $2 WHERE id = $3',
+    [hashRefreshToken(refreshToken), refreshTokenExpiresAt, user.id]
+  );
+
+  if (req) {
+    setImmediate(() => {
+      logMaintenanceAudit(
+        req,
+        req.path.includes('/refresh') ? 'REFRESH_TOKEN' : 'LOGIN',
+        'auth',
+        user.id,
+        { username: user.username, role: user.role },
+        user.id
+      );
+    });
+  }
+
+  return {
+    token,
+    csrfToken,
+    refreshToken,
+    user: publicUser(user),
+  };
+}
 
 async function login(req, res) {
   const { username, password } = req.body;
@@ -20,38 +85,38 @@ async function login(req, res) {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    const csrfToken = generateCSRFToken();
-
-    const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role, csrfToken },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
-    );
-
-    setImmediate(() => {
-      logMaintenanceAudit(
-        req,
-        'LOGIN',
-        'auth',
-        user.id,
-        { username: user.username, role: user.role },
-        user.id
-      );
-    });
-
-    res.json({
-      token,
-      csrfToken,
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-      },
-    });
+    const session = await issueSession(req, user);
+    res.json(session);
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Server error during login' });
+  }
+}
+
+async function refresh(req, res) {
+  const refreshToken = req.body?.refreshToken;
+  if (!refreshToken) {
+    return res.status(401).json({ error: 'Refresh token required' });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT *
+       FROM users
+       WHERE refresh_token = $1
+         AND refresh_token_expires_at > CURRENT_TIMESTAMP`,
+      [hashRefreshToken(refreshToken)]
+    );
+    const user = result.rows[0];
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+
+    const session = await issueSession(req, user);
+    res.json(session);
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    res.status(500).json({ error: 'Server error during session refresh' });
   }
 }
 
@@ -67,10 +132,7 @@ async function me(req, res) {
     }
     const user = result.rows[0];
     res.json({
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
+      ...publicUser(user),
       csrfToken: req.user.csrfToken,
     });
   } catch (error) {
@@ -80,7 +142,16 @@ async function me(req, res) {
 }
 
 async function logout(req, res) {
-  res.json({ message: 'Logged out successfully' });
+  try {
+    await pool.query(
+      'UPDATE users SET refresh_token = NULL, refresh_token_expires_at = NULL WHERE id = $1',
+      [req.user.id]
+    );
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ error: 'Server error during logout' });
+  }
 }
 
 async function updateProfile(req, res) {
@@ -120,25 +191,19 @@ async function updateProfile(req, res) {
     if (updates.length === 0) {
       return res.json({
         user: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          role: user.role,
+          ...publicUser(user),
           csrfToken: req.user.csrfToken,
         },
       });
     }
-    updates.push(`updated_at = CURRENT_TIMESTAMP`);
+    updates.push('updated_at = CURRENT_TIMESTAMP');
     values.push(userId);
     const query = `UPDATE users SET ${updates.join(', ')} WHERE id = $${idx} RETURNING id, username, email, role, created_at, updated_at`;
     const result = await pool.query(query, values);
     const updatedUser = result.rows[0];
     res.json({
       user: {
-        id: updatedUser.id,
-        username: updatedUser.username,
-        email: updatedUser.email,
-        role: updatedUser.role,
+        ...publicUser(updatedUser),
         csrfToken: req.user.csrfToken,
       },
     });
@@ -151,4 +216,4 @@ async function updateProfile(req, res) {
   }
 }
 
-module.exports = { login, me, logout, updateProfile };
+module.exports = { login, refresh, me, logout, updateProfile };

@@ -1,171 +1,164 @@
-import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useCallback, useState } from 'react';
 import { useAuth } from '../services/auth';
+import { apiFetch, readApiData } from '../services/api';
+import { useApiData } from '../hooks/useApiData';
 import Calendar from '../components/Calendar';
 import MaintenanceForm from '../components/MaintenanceForm';
-import { apiFetch } from '../services/auth';
+import Modal from '../components/Modal';
+import { EmptyState, ErrorState, SkeletonPage } from '../components/AsyncState';
 
 export default function CalendarPage() {
-  const { token, csrfToken, user } = useAuth();
-  const navigate = useNavigate();
-  const [schedules, setSchedules] = useState([]);
+  const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [filterDept, setFilterDept] = useState('');
   const [filterAssetType, setFilterAssetType] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [departments, setDepartments] = useState([]);
+  const [formLoading, setFormLoading] = useState(false);
+  const [formError, setFormError] = useState('');
 
-  useEffect(() => { loadSchedules(); loadDepartments(); }, []);
+  const loadPage = useCallback(async () => {
+    const [schedulesRes, departmentsRes] = await Promise.all([
+      apiFetch('/maintenance', {}),
+      apiFetch('/maintenance/departments', {}),
+    ]);
+    return {
+      schedules: await readApiData(schedulesRes),
+      departments: await readApiData(departmentsRes),
+    };
+  }, []);
 
-  const loadSchedules = async () => {
-    try {
-      const res = await apiFetch('/maintenance', {}, token, csrfToken);
-      if (res.ok) {
-        const data = await res.json();
-        setSchedules(data.data || data);
-      }
-    } catch (err) { console.error('Failed to load schedules', err); }
-  };
-
-  const loadDepartments = async () => {
-    try {
-      const res = await apiFetch('/maintenance/departments', {}, token, csrfToken);
-      if (res.ok) setDepartments(await res.json());
-    } catch (err) { console.error('Failed to load departments', err); }
-  };
-
-  const filtered = schedules.filter((s) => {
-    if (filterDept && s.department !== filterDept) return false;
-    if (filterAssetType && s.asset_type !== filterAssetType) return false;
-    if (filterStatus && s.status !== filterStatus) return false;
+  const { data, loading, error, reload } = useApiData(loadPage);
+  const schedules = data?.schedules || [];
+  const departments = data?.departments || [];
+  const filtered = schedules.filter((schedule) => {
+    if (filterDept && schedule.department !== filterDept) return false;
+    if (filterAssetType && schedule.asset_type !== filterAssetType) return false;
+    if (filterStatus && schedule.status !== filterStatus) return false;
     return true;
   });
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to cancel this schedule?')) return;
+    if (!window.confirm('Are you sure you want to cancel this schedule?')) return;
+    setFormError('');
+    setFormLoading(true);
     try {
-      const res = await apiFetch(`/maintenance/${id}`, { method: 'DELETE' }, token, csrfToken);
-      if (res.ok) { loadSchedules(); }
-    } catch (err) { console.error('Failed to delete', err); }
+      await apiFetch(`/maintenance/${id}`, { method: 'DELETE' });
+      await reload();
+    } catch (err) {
+      setFormError(err.message || 'Unable to cancel schedule');
+    } finally {
+      setFormLoading(false);
+    }
   };
 
-  const handleEdit = (s) => { setEditingSchedule(s); setShowForm(true); };
+  const handleSubmit = async (formData) => {
+    setFormError('');
+    setFormLoading(true);
+    try {
+      if (editingSchedule) {
+        await apiFetch(`/maintenance/${editingSchedule.id}`, { method: 'PUT', body: JSON.stringify(formData) });
+      } else {
+        await apiFetch('/maintenance', { method: 'POST', body: JSON.stringify(formData) });
+      }
+      setShowForm(false);
+      setEditingSchedule(null);
+      await reload();
+    } catch (err) {
+      setFormError(err.message || 'Unable to save schedule');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  if (loading && !data) return <SkeletonPage label="Loading maintenance calendar..." />;
+  if (error && !data) return <ErrorState message={error} onRetry={reload} />;
 
   return (
-    <div>
-      <div style={styles.header}>
+    <div className="page" aria-busy={loading}>
+      <header className="page-header">
         <div>
-          <h1 style={styles.heading}>Maintenance Calendar</h1>
-          <p style={styles.subtitle}>Lusaka City Council - Schedule Management</p>
+          <h1 className="page-title">Maintenance Calendar</h1>
+          <p className="page-subtitle">Lusaka City Council - Schedule Management</p>
         </div>
-        {user?.role === 'admin' && (
-          <button style={styles.addBtn} onClick={() => { setEditingSchedule(null); setShowForm(true); }}>+ Add Schedule</button>
-        )}
+        {user?.role === 'admin' && <button className="button button--primary" type="button" onClick={() => { setEditingSchedule(null); setShowForm(true); }}>+ Add Schedule</button>}
+      </header>
+
+      {(error || formError) && <div className="inline-alert" role="alert"><span>{error || formError}</span>{error && <button className="button button--secondary button--small" type="button" onClick={reload}>Retry</button>}</div>}
+      {formLoading && <div className="refresh-indicator" role="status"><span className="spinner spinner--small" aria-hidden="true" />Saving schedule...</div>}
+
+      <div className="filters" aria-label="Calendar filters">
+        <div className="filter-group">
+          <label className="sr-only" htmlFor="filter-department">Department</label>
+          <select className="input" id="filter-department" value={filterDept} onChange={(event) => setFilterDept(event.target.value)}>
+            <option value="">All Departments</option>
+            {departments.map((department) => <option key={department} value={department}>{department}</option>)}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label className="sr-only" htmlFor="filter-asset-type">Asset type</label>
+          <select className="input" id="filter-asset-type" value={filterAssetType} onChange={(event) => setFilterAssetType(event.target.value)}>
+            <option value="">All Asset Types</option>
+            <option value="laptop">Laptop</option>
+            <option value="desktop">Desktop</option>
+            <option value="network_equipment">Network Equipment</option>
+            <option value="printer">Printer</option>
+          </select>
+        </div>
+        <div className="filter-group">
+          <label className="sr-only" htmlFor="filter-status">Status</label>
+          <select className="input" id="filter-status" value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)}>
+            <option value="">All Status</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="overdue">Overdue</option>
+          </select>
+        </div>
       </div>
-      <div style={styles.filters}>
-        <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)} style={styles.filterSelect}>
-          <option value="">All Departments</option>
-          {departments.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-        <select value={filterAssetType} onChange={(e) => setFilterAssetType(e.target.value)} style={styles.filterSelect}>
-          <option value="">All Asset Types</option>
-          <option value="laptop">Laptop</option>
-          <option value="desktop">Desktop</option>
-          <option value="network_equipment">Network Equipment</option>
-          <option value="printer">Printer</option>
-        </select>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={styles.filterSelect}>
-          <option value="">All Status</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="in_progress">In Progress</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="overdue">Overdue</option>
-        </select>
-      </div>
-      <div style={styles.calendarWrap}>
+
+      <section className="calendar-card" aria-label="Maintenance calendar">
         <Calendar schedules={filtered} />
-      </div>
-      <h3 style={styles.listTitle}>All Schedules</h3>
-      <div style={styles.tableWrap}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Date</th>
-              <th style={styles.th}>Department</th>
-              <th style={styles.th}>Room</th>
-              <th style={styles.th}>Asset Type</th>
-              <th style={styles.th}>Technician</th>
-              <th style={styles.th}>Priority</th>
-              <th style={styles.th}>Status</th>
-              {user?.role === 'admin' && <th style={styles.th}>Actions</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((s) => (
-              <tr key={s.id}>
-                <td style={styles.td}>{s.date}</td>
-                <td style={styles.td}>{s.department}</td>
-                <td style={styles.td}>{s.room}</td>
-                <td style={styles.td}>{s.asset_type.replace(/_/g, ' ')}</td>
-                <td style={styles.td}>{s.technician}</td>
-                <td style={styles.td}><span style={{ ...styles.badge, backgroundColor: s.priority === 'critical' ? '#fee2e2' : s.priority === 'high' ? '#fef3c7' : s.priority === 'medium' ? '#dbeafe' : '#dcfce7', color: s.priority === 'critical' ? '#991b1b' : s.priority === 'high' ? '#92400e' : s.priority === 'medium' ? '#1e40af' : '#166534' }}>{s.priority}</span></td>
-                <td style={styles.td}><span style={{ ...styles.badge2, backgroundColor: s.status === 'completed' ? '#dcfce7' : s.status === 'cancelled' ? '#f3f4f6' : s.status === 'overdue' ? '#fee2e2' : '#dbeafe', color: s.status === 'completed' ? '#166534' : s.status === 'cancelled' ? '#6b7280' : s.status === 'overdue' ? '#991b1b' : '#1e40af' }}>{s.status.replace(/_/g, ' ')}</span></td>
-                {user?.role === 'admin' && (
-                  <td style={styles.td}>
-                    <button style={styles.editBtn} onClick={() => handleEdit(s)}>Edit</button>
-                    <button style={styles.deleteBtn} onClick={() => handleDelete(s.id)}>Cancel</button>
-                  </td>
-                )}
-              </tr>
-            ))}
-            {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: '#6b7280', padding: '24px' }}>No schedules found</td></tr>}
-          </tbody>
-        </table>
-      </div>
-      {showForm && (
-        <div style={styles.modalOverlay} onClick={() => { setShowForm(false); setEditingSchedule(null); }}>
-          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <MaintenanceForm
-              initialData={editingSchedule}
-              onSubmit={async (form) => {
-                if (editingSchedule) {
-                  await apiFetch(`/maintenance/${editingSchedule.id}`, { method: 'PUT', body: JSON.stringify(form) }, token, csrfToken);
-                } else {
-                  await apiFetch('/maintenance', { method: 'POST', body: JSON.stringify(form) }, token, csrfToken);
-                }
-                setShowForm(false);
-                setEditingSchedule(null);
-                loadSchedules();
-              }}
-              onCancel={() => { setShowForm(false); setEditingSchedule(null); }}
-              submitLabel={editingSchedule ? 'Update' : 'Add Schedule'}
-            />
-          </div>
+      </section>
+
+      <section aria-labelledby="all-schedules-title">
+        <h2 className="section-title" id="all-schedules-title">All Schedules</h2>
+        <div className="table-wrap">
+          <table className="data-table">
+            <caption className="sr-only">All maintenance schedules</caption>
+            <thead>
+              <tr><th scope="col">Date</th><th scope="col">Department</th><th scope="col">Room</th><th scope="col">Asset Type</th><th scope="col">Technician</th><th scope="col">Priority</th><th scope="col">Status</th>{user?.role === 'admin' && <th scope="col">Actions</th>}</tr>
+            </thead>
+            <tbody>
+              {filtered.map((schedule) => (
+                <tr key={schedule.id}>
+                  <td>{schedule.date}</td>
+                  <td>{schedule.department}</td>
+                  <td>{schedule.room}</td>
+                  <td>{schedule.asset_type.replace(/_/g, ' ')}</td>
+                  <td>{schedule.technician}</td>
+                  <td><span className={`badge badge--${schedule.priority}`}>{schedule.priority}</span></td>
+                  <td><span className={`badge badge--status-${schedule.status}`}>{schedule.status.replace(/_/g, ' ')}</span></td>
+                  {user?.role === 'admin' && (
+                    <td>
+                      <button className="button button--primary button--small" type="button" onClick={() => { setEditingSchedule(schedule); setShowForm(true); }} aria-label={`Edit schedule ${schedule.id}`}>Edit</button>
+                      <button className="button button--danger button--small" type="button" onClick={() => handleDelete(schedule.id)} disabled={formLoading} aria-label={`Cancel schedule ${schedule.id}`}>Cancel</button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+              {filtered.length === 0 && <tr><td colSpan={user?.role === 'admin' ? 8 : 7}><EmptyState>No schedules found</EmptyState></td></tr>}
+            </tbody>
+          </table>
         </div>
+      </section>
+
+      {showForm && (
+        <Modal title={editingSchedule ? 'Edit Maintenance Schedule' : 'Add Maintenance Schedule'} onClose={() => { setShowForm(false); setEditingSchedule(null); }}>
+          <MaintenanceForm initialData={editingSchedule} onSubmit={handleSubmit} onCancel={() => { setShowForm(false); setEditingSchedule(null); }} submitLabel={editingSchedule ? 'Update' : 'Add Schedule'} loading={formLoading} />
+        </Modal>
       )}
     </div>
   );
 }
-
-const styles = {
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' },
-  heading: { margin: 0, fontSize: '28px', color: '#1f2937', fontWeight: '700' },
-  subtitle: { margin: '4px 0 0 0', color: '#6b7280', fontSize: '14px' },
-  addBtn: { padding: '10px 20px', backgroundColor: '#F97316', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
-  filters: { display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' },
-  filterSelect: { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', backgroundColor: '#fff' },
-  calendarWrap: { backgroundColor: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #e5e7eb', marginBottom: '32px' },
-  listTitle: { fontSize: '18px', color: '#1f2937', fontWeight: '600' },
-  tableWrap: { borderRadius: '8px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginTop: '12px' },
-  table: { width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' },
-  th: { textAlign: 'left', padding: '10px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb', fontSize: '13px', fontWeight: '600', color: '#374151', whiteSpace: 'nowrap' },
-  td: { padding: '10px', borderBottom: '1px solid #e5e7eb', fontSize: '13px', color: '#374151', whiteSpace: 'nowrap' },
-  badge: { padding: '3px 8px', borderRadius: '9999px', fontSize: '11px', fontWeight: '600', textTransform: 'capitalize' },
-  badge2: { padding: '3px 8px', borderRadius: '9999px', fontSize: '11px', fontWeight: '600', textTransform: 'capitalize' },
-  editBtn: { padding: '4px 10px', backgroundColor: '#F97316', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', marginRight: '6px' },
-  deleteBtn: { padding: '4px 10px', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' },
-  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' },
-  modalContent: { backgroundColor: '#fff', borderRadius: '12px', padding: '24px', maxWidth: '700px', width: '100%', maxHeight: '90vh', overflowY: 'auto' },
-};

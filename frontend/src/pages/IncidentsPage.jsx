@@ -1,102 +1,113 @@
-import React, { useEffect, useState } from 'react';
-import { useAuth, apiFetch } from '../services/auth';
+import { useCallback, useState } from 'react';
+import { useAuth } from '../services/auth';
+import { apiFetch, readApiData } from '../services/api';
+import { useApiData } from '../hooks/useApiData';
+import Modal from '../components/Modal';
+import { EmptyState, ErrorState, SkeletonPage } from '../components/AsyncState';
 
 const ASSET_TYPES = ['laptop', 'desktop', 'network_equipment', 'printer'];
 const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 const STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
 
 export default function IncidentsPage() {
-  const { token, csrfToken, user } = useAuth();
-  const [incidents, setIncidents] = useState([]);
-  const [departments, setDepartments] = useState([]);
+  const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ title: '', description: '', department: '', room: '', asset_type: '', asset_identifier: '', priority: 'medium', status: 'open' });
   const [errors, setErrors] = useState({});
   const [filters, setFilters] = useState({ status: '', priority: '', department: '', search: '' });
   const [loading, setLoading] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [actionLoadingId, setActionLoadingId] = useState(null);
 
-  useEffect(() => { loadIncidents(); loadDepartments(); }, []);
+  const loadPage = useCallback(async () => {
+    const [incidentsRes, departmentsRes] = await Promise.all([
+      apiFetch('/incidents', {}),
+      apiFetch('/maintenance/departments', {}),
+    ]);
+    return {
+      incidents: await readApiData(incidentsRes),
+      departments: await readApiData(departmentsRes),
+    };
+  }, []);
 
-  const loadIncidents = async () => {
-    try {
-      const res = await apiFetch('/incidents', {}, token, csrfToken);
-      if (res.ok) {
-        const data = await res.json();
-        setIncidents(data.data || data);
-      }
-    } catch (err) { console.error('Failed to load incidents', err); }
-  };
-
-  const loadDepartments = async () => {
-    try {
-      const res = await apiFetch('/maintenance/departments', {}, token, csrfToken);
-      if (res.ok) setDepartments(await res.json());
-    } catch (err) { console.error('Failed to load departments', err); }
-  };
+  const { data, loading: pageLoading, error, reload } = useApiData(loadPage);
+  const incidents = data?.incidents || [];
+  const departments = data?.departments || [];
+  const filtered = incidents.filter((incident) => {
+    if (filters.status && incident.status !== filters.status) return false;
+    if (filters.priority && incident.priority !== filters.priority) return false;
+    if (filters.department && incident.department !== filters.department) return false;
+    if (filters.search && !(incident.title?.toLowerCase().includes(filters.search.toLowerCase()) || incident.description?.toLowerCase().includes(filters.search.toLowerCase()))) return false;
+    return true;
+  });
 
   const validate = () => {
-    const e = {};
-    if (!form.title || !form.title.trim()) e.title = 'Title is required';
-    else if (form.title.length > 255) e.title = 'Title must be 255 characters or fewer';
-    if (!form.description || !form.description.trim()) e.description = 'Description is required';
-    else if (form.description.length > 2000) e.description = 'Description must be 2000 characters or fewer';
-    if (form.room && form.room.length > 255) e.room = 'Room must be 255 characters or fewer';
-    if (form.asset_identifier && form.asset_identifier.length > 255) e.asset_identifier = 'Asset identifier must be 255 characters or fewer';
-    if (form.department && form.department.length > 255) e.department = 'Department must be 255 characters or fewer';
-    setErrors(e);
-    return Object.keys(e).length === 0;
+    const nextErrors = {};
+    if (!form.title || !form.title.trim()) nextErrors.title = 'Title is required';
+    else if (form.title.length > 255) nextErrors.title = 'Title must be 255 characters or fewer';
+    if (!form.description || !form.description.trim()) nextErrors.description = 'Description is required';
+    else if (form.description.length > 2000) nextErrors.description = 'Description must be 2000 characters or fewer';
+    if (form.room && form.room.length > 255) nextErrors.room = 'Room must be 255 characters or fewer';
+    if (form.asset_identifier && form.asset_identifier.length > 255) nextErrors.asset_identifier = 'Asset identifier must be 255 characters or fewer';
+    if (form.department && form.department.length > 255) nextErrors.department = 'Department must be 255 characters or fewer';
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     if (!validate()) return;
+    setActionError('');
     setLoading(true);
     try {
       if (editingId) {
-         await apiFetch(`/incidents/${editingId}`, { method: 'PUT', body: JSON.stringify(form) }, token, csrfToken);
-       } else {
-         await apiFetch('/incidents', { method: 'POST', body: JSON.stringify(form) }, token, csrfToken);
+        await apiFetch(`/incidents/${editingId}`, { method: 'PUT', body: JSON.stringify(form) });
+      } else {
+        await apiFetch('/incidents', { method: 'POST', body: JSON.stringify(form) });
       }
-      setShowForm(false);
-      setEditingId(null);
-      setForm({ title: '', description: '', department: '', room: '', asset_type: '', asset_identifier: '', priority: 'medium', status: 'open' });
-      setErrors({});
-      loadIncidents();
-    } catch (err) { console.error('Failed to save incident', err); }
-    finally { setLoading(false); }
+      closeForm();
+      await reload();
+    } catch (err) {
+      setActionError(err.message || 'Unable to save incident');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEdit = (inc) => {
-    setEditingId(inc.id);
-    setForm({ title: inc.title, description: inc.description, department: inc.department || '', room: inc.room || '', asset_type: inc.asset_type || '', asset_identifier: inc.asset_identifier || '', priority: inc.priority || 'medium', status: inc.status || 'open' });
+  const handleEdit = (incident) => {
+    setEditingId(incident.id);
+    setForm({ title: incident.title, description: incident.description, department: incident.department || '', room: incident.room || '', asset_type: incident.asset_type || '', asset_identifier: incident.asset_identifier || '', priority: incident.priority || 'medium', status: incident.status || 'open' });
+    setErrors({});
     setShowForm(true);
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this incident?')) return;
+    if (!window.confirm('Are you sure you want to delete this incident?')) return;
+    setActionError('');
+    setActionLoadingId(id);
     try {
-      const res = await apiFetch(`/incidents/${id}`, { method: 'DELETE' }, token, csrfToken);
-      if (res) { loadIncidents(); }
-    } catch (err) { console.error('Failed to delete incident', err); }
+      await apiFetch(`/incidents/${id}`, { method: 'DELETE' });
+      await reload();
+    } catch (err) {
+      setActionError(err.message || 'Unable to delete incident');
+    } finally {
+      setActionLoadingId(null);
+    }
   };
 
-  const handleQuickStatus = async (inc, newStatus) => {
+  const handleQuickStatus = async (incident, newStatus) => {
+    setActionError('');
+    setActionLoadingId(incident.id);
     try {
-      await apiFetch(`/incidents/${inc.id}`, { method: 'PUT', body: JSON.stringify({ status: newStatus }) }, token, csrfToken);
-      loadIncidents();
-    } catch (err) { console.error('Failed to update status', err); }
+      await apiFetch(`/incidents/${incident.id}`, { method: 'PUT', body: JSON.stringify({ status: newStatus }) });
+      await reload();
+    } catch (err) {
+      setActionError(err.message || 'Unable to update incident status');
+    } finally {
+      setActionLoadingId(null);
+    }
   };
-
-  const data = Array.isArray(incidents) ? incidents : (incidents?.data || []);
-
-  const filtered = data.filter((r) => {
-    if (filters.status && r.status !== filters.status) return false;
-    if (filters.priority && r.priority !== filters.priority) return false;
-    if (filters.department && r.department !== filters.department) return false;
-    if (filters.search && !(r.title?.toLowerCase().includes(filters.search.toLowerCase()) || r.description?.toLowerCase().includes(filters.search.toLowerCase()))) return false;
-    return true;
-  });
 
   const closeForm = () => {
     setShowForm(false);
@@ -105,188 +116,143 @@ export default function IncidentsPage() {
     setErrors({});
   };
 
+  if (pageLoading && !data) return <SkeletonPage label="Loading incidents..." />;
+  if (error && !data) return <ErrorState message={error} onRetry={reload} />;
+
   return (
-    <div>
-      <div style={styles.header}>
+    <div className="page" aria-busy={pageLoading}>
+      <header className="page-header">
         <div>
-          <h1 style={styles.heading}>Incidents</h1>
-          <p style={styles.subtitle}>Report and track maintenance incidents</p>
+          <h1 className="page-title">Incidents</h1>
+          <p className="page-subtitle">Report and track maintenance incidents</p>
         </div>
-        <button style={styles.addBtn} onClick={() => setShowForm(true)}>+ Report Incident</button>
+        <button className="button button--primary" type="button" onClick={() => setShowForm(true)}>+ Report Incident</button>
+      </header>
+
+      {(error || actionError) && <div className="inline-alert" role="alert"><span>{error || actionError}</span>{error && <button className="button button--secondary button--small" type="button" onClick={reload}>Retry</button>}</div>}
+      {actionLoadingId && <div className="refresh-indicator" role="status"><span className="spinner spinner--small" aria-hidden="true" />Saving incident...</div>}
+
+      <div className="filters" aria-label="Incident filters">
+        <div className="filter-group filter-group--search">
+          <label className="sr-only" htmlFor="incident-search">Search incidents</label>
+          <input className="input" id="incident-search" type="search" placeholder="Search incidents..." value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} />
+        </div>
+        <div className="filter-group">
+          <label className="sr-only" htmlFor="incident-status">Status</label>
+          <select className="input" id="incident-status" value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
+            <option value="">All Status</option>
+            {STATUSES.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label className="sr-only" htmlFor="incident-priority">Priority</label>
+          <select className="input" id="incident-priority" value={filters.priority} onChange={(event) => setFilters({ ...filters, priority: event.target.value })}>
+            <option value="">All Priority</option>
+            {PRIORITIES.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label className="sr-only" htmlFor="incident-department">Department</label>
+          <select className="input" id="incident-department" value={filters.department} onChange={(event) => setFilters({ ...filters, department: event.target.value })}>
+            <option value="">All Departments</option>
+            {departments.map((department) => <option key={department} value={department}>{department}</option>)}
+          </select>
+        </div>
       </div>
 
-      <div style={styles.filters}>
-        <input type="text" placeholder="Search incidents..." value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} style={styles.searchInput} />
-        <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} style={styles.filterSelect}>
-          <option value="">All Status</option>
-          {STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-        </select>
-        <select value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })} style={styles.filterSelect}>
-          <option value="">All Priority</option>
-          {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
-        <select value={filters.department} onChange={(e) => setFilters({ ...filters, department: e.target.value })} style={styles.filterSelect}>
-          <option value="">All Departments</option>
-          {departments.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-      </div>
-
-      <div style={styles.tableWrap}>
-        <table style={styles.table}>
+      <div className="table-wrap">
+        <table className="data-table">
+          <caption className="sr-only">Maintenance incidents</caption>
           <thead>
-            <tr>
-              <th style={styles.th}>Reported</th>
-              <th style={styles.th}>Title</th>
-              <th style={styles.th}>Description</th>
-              <th style={styles.th}>Asset</th>
-              <th style={styles.th}>Priority</th>
-              <th style={styles.th}>Status</th>
-              <th style={styles.th}>Reported By</th>
-              <th style={styles.th}>Actions</th>
-            </tr>
+            <tr><th scope="col">Reported</th><th scope="col">Title</th><th scope="col">Description</th><th scope="col">Asset</th><th scope="col">Priority</th><th scope="col">Status</th><th scope="col">Reported By</th><th scope="col">Actions</th></tr>
           </thead>
           <tbody>
-            {filtered.map((r) => (
-              <tr key={r.id}>
-                <td style={styles.td}>{r.created_at?.split('T')[0] || '-'}</td>
-                <td style={styles.td}>{r.title}</td>
-                <td style={styles.td}>{r.description?.substring(0, 60)}{r.description?.length > 60 ? '...' : ''}</td>
-                <td style={styles.td}>{r.asset_type ? r.asset_type.replace(/_/g, ' ') : '-'}</td>
-                <td style={styles.td}>
-                  <span style={{ ...styles.badge, ...priorityColor(r.priority) }}>{r.priority}</span>
-                </td>
-                <td style={styles.td}>
-                  <select value={r.status} onChange={(e) => handleQuickStatus(r, e.target.value)} style={{ ...styles.statusSelect, ...statusColor(r.status) }}>
-                    {STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+            {filtered.map((incident) => (
+              <tr key={incident.id}>
+                <td>{incident.created_at?.split('T')[0] || '-'}</td>
+                <td>{incident.title}</td>
+                <td>{incident.description?.substring(0, 60)}{incident.description?.length > 60 ? '...' : ''}</td>
+                <td>{incident.asset_type ? incident.asset_type.replace(/_/g, ' ') : '-'}</td>
+                <td><span className={`badge badge--${incident.priority}`}>{incident.priority}</span></td>
+                <td>
+                  <label className="sr-only" htmlFor={`status-${incident.id}`}>Status for {incident.title}</label>
+                  <select className="status-select" id={`status-${incident.id}`} value={incident.status} onChange={(event) => handleQuickStatus(incident, event.target.value)} disabled={actionLoadingId === incident.id} aria-label={`Status for ${incident.title}`}>
+                    {STATUSES.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
                   </select>
                 </td>
-                <td style={styles.td}>{r.reported_by_name || user?.username}</td>
-                <td style={styles.td}>
-                  <button style={styles.editBtn} onClick={() => handleEdit(r)}>Edit</button>
-                  <button style={styles.deleteBtn} onClick={() => handleDelete(r.id)}>Delete</button>
+                <td>{incident.reported_by_name || user?.username}</td>
+                <td>
+                  <button className="button button--primary button--small" type="button" onClick={() => handleEdit(incident)} aria-label={`Edit incident ${incident.id}`}>Edit</button>
+                  <button className="button button--danger button--small" type="button" onClick={() => handleDelete(incident.id)} disabled={actionLoadingId === incident.id} aria-label={`Delete incident ${incident.id}`}>Delete</button>
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: '#6b7280', padding: '24px' }}>No incidents found</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan="8"><EmptyState>No incidents found</EmptyState></td></tr>}
           </tbody>
         </table>
       </div>
 
       {showForm && (
-        <div style={styles.modalOverlay} onClick={closeForm}>
-          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <h3 style={styles.modalTitle}>{editingId ? 'Edit Incident' : 'Report Incident'}</h3>
-            <form onSubmit={handleSubmit} style={styles.form}>
-              <div style={styles.field}>
-                <label style={styles.label}>Title *</label>
-                <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} style={{ ...styles.input, borderColor: errors.title ? '#dc2626' : '#d1d5db' }} required />
-                {errors.title && <span style={styles.errorText}>{errors.title}</span>}
+        <Modal title={editingId ? 'Edit Incident' : 'Report Incident'} onClose={closeForm}>
+          <form className="form-stack" onSubmit={handleSubmit} aria-busy={loading}>
+            <div className="form-field">
+              <label className="field-label" htmlFor="incident-title">Title *</label>
+              <input className={`input${errors.title ? ' input--error' : ''}`} id="incident-title" type="text" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} required aria-invalid={Boolean(errors.title)} aria-describedby={errors.title ? 'incident-title-error' : undefined} />
+              {errors.title && <span className="error-text" id="incident-title-error">{errors.title}</span>}
+            </div>
+            <div className="form-field">
+              <label className="field-label" htmlFor="incident-description">Description *</label>
+              <textarea className={`input${errors.description ? ' input--error' : ''}`} id="incident-description" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Describe the incident" rows={3} required aria-invalid={Boolean(errors.description)} aria-describedby={errors.description ? 'incident-description-error' : undefined} />
+              {errors.description && <span className="error-text" id="incident-description-error">{errors.description}</span>}
+            </div>
+            <div className="form-row">
+              <div className="form-field">
+                <label className="field-label" htmlFor="incident-department-form">Department</label>
+                <select className="input" id="incident-department-form" value={form.department} onChange={(event) => setForm({ ...form, department: event.target.value })}>
+                  <option value="">Select department</option>
+                  {departments.map((department) => <option key={department} value={department}>{department}</option>)}
+                </select>
               </div>
-              <div style={styles.field}>
-                <label style={styles.label}>Description *</label>
-                <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ ...styles.textarea, borderColor: errors.description ? '#dc2626' : '#d1d5db' }} placeholder="Describe the incident" rows={3} required />
-                {errors.description && <span style={styles.errorText}>{errors.description}</span>}
+              <div className="form-field">
+                <label className="field-label" htmlFor="incident-room">Room</label>
+                <input className="input" id="incident-room" type="text" value={form.room} onChange={(event) => setForm({ ...form, room: event.target.value })} />
               </div>
-              <div style={styles.row}>
-                <div style={styles.half}>
-                  <label style={styles.label}>Department</label>
-                  <select value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} style={styles.input}>
-                    <option value="">Select department</option>
-                    {departments.map((d) => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
-                <div style={styles.half}>
-                  <label style={styles.label}>Room</label>
-                  <input type="text" value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} style={styles.input} />
-                </div>
+            </div>
+            <div className="form-row">
+              <div className="form-field">
+                <label className="field-label" htmlFor="incident-asset-type">Asset Type</label>
+                <select className="input" id="incident-asset-type" value={form.asset_type} onChange={(event) => setForm({ ...form, asset_type: event.target.value })}>
+                  <option value="">None</option>
+                  {ASSET_TYPES.map((type) => <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>)}
+                </select>
               </div>
-              <div style={styles.row}>
-                <div style={styles.half}>
-                  <label style={styles.label}>Asset Type</label>
-                  <select value={form.asset_type} onChange={(e) => setForm({ ...form, asset_type: e.target.value })} style={styles.input}>
-                    <option value="">None</option>
-                    {ASSET_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
-                  </select>
-                </div>
-                <div style={styles.half}>
-                  <label style={styles.label}>Asset Identifier</label>
-                  <input type="text" value={form.asset_identifier} onChange={(e) => setForm({ ...form, asset_identifier: e.target.value })} style={styles.input} placeholder="Serial/tag" />
-                </div>
+              <div className="form-field">
+                <label className="field-label" htmlFor="incident-asset-identifier">Asset Identifier</label>
+                <input className={`input${errors.asset_identifier ? ' input--error' : ''}`} id="incident-asset-identifier" type="text" value={form.asset_identifier} onChange={(event) => setForm({ ...form, asset_identifier: event.target.value })} placeholder="Serial/tag" aria-invalid={Boolean(errors.asset_identifier)} aria-describedby={errors.asset_identifier ? 'incident-asset-identifier-error' : undefined} />
+                {errors.asset_identifier && <span className="error-text" id="incident-asset-identifier-error">{errors.asset_identifier}</span>}
               </div>
-              <div style={styles.row}>
-                <div style={styles.half}>
-                  <label style={styles.label}>Priority</label>
-                  <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} style={styles.input}>
-                    {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-                <div style={styles.half}>
-                  <label style={styles.label}>Status</label>
-                  <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={styles.input}>
-                    {STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-                  </select>
-                </div>
+            </div>
+            <div className="form-row">
+              <div className="form-field">
+                <label className="field-label" htmlFor="incident-priority-form">Priority</label>
+                <select className="input" id="incident-priority-form" value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>
+                  {PRIORITIES.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+                </select>
               </div>
-              <div style={styles.actions}>
-                <button type="submit" style={{ ...styles.submitBtn, opacity: loading ? 0.7 : 1 }} disabled={loading}>{loading ? 'Saving...' : (editingId ? 'Update Incident' : 'Report Incident')}</button>
-                <button type="button" onClick={closeForm} style={styles.cancelBtn}>Cancel</button>
+              <div className="form-field">
+                <label className="field-label" htmlFor="incident-status-form">Status</label>
+                <select className="input" id="incident-status-form" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
+                  {STATUSES.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
+                </select>
               </div>
-            </form>
-          </div>
-        </div>
+            </div>
+            <div className="form-actions">
+              <button className="button button--primary" type="submit" disabled={loading}>{loading ? 'Saving...' : (editingId ? 'Update Incident' : 'Report Incident')}</button>
+              <button className="button button--secondary" type="button" onClick={closeForm} disabled={loading}>Cancel</button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );
 }
-
-function priorityColor(priority) {
-  const map = {
-    low: { color: '#166534', backgroundColor: '#dcfce7' },
-    medium: { color: '#1e40af', backgroundColor: '#dbeafe' },
-    high: { color: '#92400e', backgroundColor: '#fef3c7' },
-    critical: { color: '#991b1b', backgroundColor: '#fee2e2' },
-  };
-  return map[priority] || {};
-}
-
-function statusColor(status) {
-  const map = {
-    open: { color: '#1e40af', backgroundColor: '#dbeafe' },
-    in_progress: { color: '#92400e', backgroundColor: '#fef3c7' },
-    resolved: { color: '#15803d', backgroundColor: '#dcfce7' },
-    closed: { color: '#6b7280', backgroundColor: '#f3f4f6' },
-  };
-  return map[status] || {};
-}
-
-const styles = {
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' },
-  heading: { margin: 0, fontSize: '28px', color: '#1f2937', fontWeight: '700' },
-  subtitle: { margin: '4px 0 0 0', color: '#6b7280', fontSize: '14px' },
-  addBtn: { padding: '10px 20px', backgroundColor: '#F97316', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
-  filters: { display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center' },
-  searchInput: { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', minWidth: '240px' },
-  filterSelect: { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', backgroundColor: '#fff', minWidth: '160px' },
-  tableWrap: { borderRadius: '8px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' },
-  table: { width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' },
-  th: { textAlign: 'left', padding: '10px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb', fontSize: '13px', fontWeight: '600', color: '#374151' },
-  td: { padding: '10px', borderBottom: '1px solid #e5e7eb', fontSize: '13px', color: '#374151' },
-  badge: { padding: '3px 8px', borderRadius: '9999px', fontSize: '11px', fontWeight: '600', textTransform: 'capitalize' },
-  statusSelect: { padding: '3px 8px', borderRadius: '9999px', fontSize: '11px', fontWeight: '600', textTransform: 'capitalize', border: '1px solid #e5e7eb', backgroundColor: '#fff', cursor: 'pointer' },
-  editBtn: { padding: '4px 10px', backgroundColor: '#F97316', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', marginRight: '6px' },
-  deleteBtn: { padding: '4px 10px', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' },
-  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' },
-  modalContent: { backgroundColor: '#fff', borderRadius: '12px', padding: '24px', maxWidth: '700px', width: '100%', maxHeight: '90vh', overflowY: 'auto' },
-  modalTitle: { margin: '0 0 16px 0', fontSize: '20px', color: '#1f2937' },
-  form: { display: 'flex', flexDirection: 'column', gap: '4px' },
-  row: { display: 'flex', gap: '16px', marginBottom: '4px' },
-  half: { flex: 1, display: 'flex', flexDirection: 'column' },
-  field: { marginBottom: '12px' },
-  label: { fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '4px' },
-  input: { padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', outline: 'none', backgroundColor: '#fff' },
-  textarea: { padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', outline: 'none', resize: 'vertical', fontFamily: 'inherit' },
-  errorText: { color: '#dc2626', fontSize: '12px', marginTop: '2px' },
-  actions: { display: 'flex', gap: '12px', marginTop: '16px' },
-  submitBtn: { padding: '12px 24px', backgroundColor: '#F97316', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
-  cancelBtn: { padding: '12px 24px', backgroundColor: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '15px', fontWeight: '500', cursor: 'pointer' },
-};

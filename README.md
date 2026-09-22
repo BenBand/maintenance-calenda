@@ -4,7 +4,7 @@ Lusaka City Council - IT Maintenance Calendar System for laptops, desktops, netw
 
 ## Security Features
 
-- **JWT + bcrypt authentication** with configurable expiry
+- **JWT + bcrypt authentication** with short-lived access tokens and rotating refresh tokens
 - **Rate limiting** on login (5 attempts / 15 min) and all API routes (100 requests / 15 min)
 - **Helmet.js** security headers (clickjacking protection, MIME sniffing prevention, CSP, XSS filtering)
 - **CSRF protection** - a synchronizer token is issued with the JWT and validated on all state-changing requests

@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: maintenance-calendar
+    env: node
+    region: oregon
+    plan: starter
+    buildCommand: |
+      npm install
+      cd frontend
+      npm install
+      npm run build
+    startCommand: |
+      cd backend
+      npm install
+      npm run migrate
+      npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: JWT_SECRET
+        generate: true
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      - key: BCRYPT_SALT_ROUNDS
+        value: 10
+      - key: AUDIT_IP_SALT
+        generate: true
+      - key: DATABASE_URL
+        database: maintenance_db
+      - key: CLIENT_ORIGIN
+        value: https://your-custom-domain.com
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        value: change-me-on-first-login
+      - key: ADMIN_EMAIL
+        value: admin@example.com
+      - key: VITE_API_URL
+        value: https://your-custom-domain.com

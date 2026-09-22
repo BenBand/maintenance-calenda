@@ -1,6 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../services/auth';
+import { useMemo, useState } from 'react';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -8,132 +6,108 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 function getCalendarDays(year, month) {
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
-  const startPadding = firstDay.getDay();
   const days = [];
-  for (let i = 0; i < startPadding; i++) days.push(null);
-  for (let d = 1; d <= lastDay.getDate(); d++) days.push(d);
+  for (let i = 0; i < firstDay.getDay(); i += 1) days.push(null);
+  for (let day = 1; day <= lastDay.getDate(); day += 1) days.push(day);
   return days;
+}
+
+function formatDateLabel(year, month, day) {
+  return new Intl.DateTimeFormat('en', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(year, month, day - 1));
 }
 
 export default function Calendar({ schedules }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
-
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const calendarDays = useMemo(() => getCalendarDays(year, month), [year, month]);
+  const today = new Date().toISOString().split('T')[0];
 
   const schedulesByDate = useMemo(() => {
     const map = {};
-    (schedules || []).forEach((s) => {
-      const d = s.date.split('T')[0];
-      if (!map[d]) map[d] = [];
-      map[d].push(s);
+    (schedules || []).forEach((schedule) => {
+      const date = schedule.date.split('T')[0];
+      if (!map[date]) map[date] = [];
+      map[date].push(schedule);
     });
     return map;
   }, [schedules]);
 
-  const today = new Date().toISOString().split('T')[0];
-
-  const events = selectedDate ? (schedulesByDate[selectedDate] || []) : [];
-
-  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+  const selectedEvents = selectedDate ? (schedulesByDate[selectedDate] || []) : [];
+  const moveMonth = (offset) => setCurrentDate(new Date(year, month + offset, 1));
 
   return (
-    <div>
-      <div style={styles.header}>
-        <h2 style={styles.heading}>
-          {MONTHS[month]} {year}
-        </h2>
-        <div style={styles.navBtns}>
-          <button style={styles.navBtn} onClick={prevMonth}>&lt; Prev</button>
-          <button style={styles.navBtn} onClick={() => setCurrentDate(new Date())}>Today</button>
-          <button style={styles.navBtn} onClick={nextMonth}>Next &gt;</button>
+    <div className="calendar">
+      <div className="calendar__header">
+        <h2 className="calendar__title">{MONTHS[month]} {year}</h2>
+        <div className="calendar__nav">
+          <button className="button button--secondary button--small" type="button" onClick={() => moveMonth(-1)} aria-label="Previous month">Prev</button>
+          <button className="button button--secondary button--small" type="button" onClick={() => setCurrentDate(new Date())}>Today</button>
+          <button className="button button--primary button--small" type="button" onClick={() => moveMonth(1)} aria-label="Next month">Next month</button>
         </div>
       </div>
-      <div style={styles.calendar}>
-        {DAYS.map((d) => (
-          <div key={d} style={styles.dayHeader}>{d}</div>
-        ))}
-        {calendarDays.map((day, idx) => {
-          const dateStr = day ? `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` : null;
-          const dayEvents = dateStr ? (schedulesByDate[dateStr] || []) : [];
-          const isToday = dateStr === today;
-          const isSelected = dateStr === selectedDate;
-          return (
-            <div
-              key={idx}
-              style={{
-                ...styles.dayCell,
-                ...(isToday ? styles.today : {}),
-                ...(isSelected ? styles.selectedDay : {}),
-              }}
-              onClick={() => dateStr && setSelectedDate(dateStr)}
-            >
-              {day && (
-                <>
-                  <span style={styles.dayNumber}>{day}</span>
-                  {dayEvents.length > 0 && (
-                    <div style={styles.eventMarkers}>
-                      {dayEvents.slice(0, 3).map((ev) => (
-                        <span key={ev.id} style={{
-                          ...styles.eventDot,
-                          backgroundColor: ev.priority === 'critical' ? '#dc2626' : ev.priority === 'high' ? '#F97316' : '#2563eb',
-                        }} title={ev.description || ev.asset_type} />
-                      ))}
-                      {dayEvents.length > 3 && <span style={styles.moreText}>+{dayEvents.length - 3}</span>}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          );
-        })}
+
+      <div className="calendar__scroll" aria-label="Month calendar">
+        <div className="calendar__grid">
+          {DAYS.map((day) => <div className="calendar__day-header" key={day} role="columnheader">{day}</div>)}
+          {calendarDays.map((day, index) => {
+            const date = day ? `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` : null;
+            const dayEvents = date ? (schedulesByDate[date] || []) : [];
+            const isToday = date === today;
+            const isSelected = date === selectedDate;
+            const className = [
+              'calendar__day',
+              isToday ? 'calendar__day--today' : '',
+              isSelected ? 'calendar__day--selected' : '',
+            ].filter(Boolean).join(' ');
+
+            return (
+              <button
+                className={className}
+                key={`${date || 'empty'}-${index}`}
+                type="button"
+                disabled={!day}
+                aria-pressed={isSelected}
+                aria-label={day ? `${formatDateLabel(year, month, day)}, ${dayEvents.length} maintenance ${dayEvents.length === 1 ? 'item' : 'items'}` : undefined}
+                onClick={() => date && setSelectedDate(date)}
+              >
+                {day && (
+                  <>
+                    <span className="calendar__day-number">{day}</span>
+                    {dayEvents.length > 0 && (
+                      <span className="calendar__markers" aria-hidden="true">
+                        {dayEvents.slice(0, 3).map((event) => <span className={`calendar__marker calendar__marker--${event.priority}`} key={event.id} />)}
+                        {dayEvents.length > 3 && <span className="calendar__more">+{dayEvents.length - 3}</span>}
+                      </span>
+                    )}
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
+
       {selectedDate && (
-        <div style={styles.dayDetails}>
-          <div style={styles.dayDetailsHeader}>
-            <h3 style={styles.dayDetailsTitle}>{selectedDate}</h3>
-            <button style={styles.closeBtn} onClick={() => setSelectedDate(null)}>X</button>
+        <section className="day-details" aria-labelledby="selected-date-title" aria-live="polite">
+          <div className="day-details__header">
+            <h3 className="day-details__title" id="selected-date-title">{selectedDate}</h3>
+            <button className="day-details__close" type="button" onClick={() => setSelectedDate(null)} aria-label="Close selected date details">&times;</button>
           </div>
-          {events.length === 0 ? (
-            <p style={styles.emptyText}>No events scheduled</p>
-          ) : (
-            events.map((ev) => (
-              <div key={ev.id} style={styles.eventCard}>
-                <div style={styles.eventTitle}>{ev.description || `${ev.asset_type} - ${ev.room}`}</div>
-                <div style={styles.eventMeta}>Technician: {ev.technician} | Priority: {ev.priority}</div>
-                <div style={styles.eventMeta}>Status: {ev.status}</div>
-              </div>
-            ))
+          {selectedEvents.length === 0 ? <p className="empty-state">No events scheduled</p> : (
+            <div className="event-list">
+              {selectedEvents.map((event) => (
+                <article className="event-card" key={event.id}>
+                  <div className="event-item__title">{event.description || `${event.asset_type} - ${event.room}`}</div>
+                  <div className="event-item__meta">Technician: {event.technician} | Priority: {event.priority}</div>
+                  <div className="event-item__meta">Status: {event.status}</div>
+                </article>
+              ))}
+            </div>
           )}
-        </div>
+        </section>
       )}
     </div>
   );
 }
-
-const styles = {
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
-  heading: { margin: 0, fontSize: '22px', color: '#1f2937' },
-  navBtns: { display: 'flex', gap: '8px' },
-  navBtn: { padding: '8px 14px', backgroundColor: '#fff', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' },
-  calendar: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '24px' },
-  dayHeader: { textAlign: 'center', padding: '8px', fontSize: '12px', fontWeight: '600', color: '#6b7280' },
-  dayCell: { minHeight: '80px', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '6px', cursor: 'pointer', backgroundColor: '#fff', transition: 'border-color 0.15s' },
-  today: { borderColor: '#F97316', backgroundColor: '#fff7ed' },
-  selectedDay: { borderColor: '#F97316', backgroundColor: '#fff7ed', boxShadow: '0 0 0 2px #F97316' },
-  dayNumber: { fontSize: '14px', fontWeight: '500', color: '#1f2937' },
-  eventMarkers: { display: 'flex', flexWrap: 'wrap', gap: '3px', marginTop: '4px' },
-  eventDot: { width: '8px', height: '8px', borderRadius: '50%' },
-  moreText: { fontSize: '10px', color: '#6b7280' },
-  dayDetails: { backgroundColor: '#fff', borderRadius: '8px', padding: '16px', border: '1px solid #e5e7eb', marginTop: '16px' },
-  dayDetailsHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  dayDetailsTitle: { margin: 0, fontSize: '18px', color: '#1f2937' },
-  closeBtn: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#6b7280' },
-  emptyText: { color: '#6b7280' },
-  eventCard: { padding: '10px', borderBottom: '1px solid #f3f4f6', backgroundColor: '#f9fafb', borderRadius: '6px', marginBottom: '8px' },
-  eventTitle: { fontWeight: '600', color: '#1f2937', fontSize: '14px' },
-  eventMeta: { fontSize: '12px', color: '#6b7280' },
-};

@@ -1,39 +1,107 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../services/auth';
+import { useTheme } from './ThemeProvider';
+
+const NAV_ITEMS = [
+  { to: '/', label: 'Dashboard' },
+  { to: '/calendar', label: 'Calendar' },
+  { to: '/records', label: 'Records' },
+  { to: '/incidents', label: 'Incidents' },
+];
 
 export default function Navbar() {
   const { user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (event) => {
+      event.preventDefault();
+      setInstallPrompt(event);
+    };
+    const handleInstalled = () => setInstallPrompt(null);
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleInstalled);
+    };
+  }, []);
+
+  const closeMenu = () => setMenuOpen(false);
+  const installApp = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    await installPrompt.userChoice;
+    setInstallPrompt(null);
+  };
 
   return (
-    <header style={styles.navbar}>
-      <div style={styles.inner}>
-        <Link to="/" style={styles.brand}>
-          <span style={styles.brandMark}>MC</span>
-          <span>Maintenance Calendar</span>
+    <header className="navbar">
+      <div className="navbar__inner">
+        <Link className="navbar__brand" to="/" onClick={closeMenu} aria-label="Maintenance Calendar home">
+          <span className="brand-mark" aria-hidden="true">MC</span>
+          <span className="navbar__brand-text">Maintenance Calendar</span>
         </Link>
-        <nav style={styles.nav}>
-          <Link to="/" style={styles.navLink}>Dashboard</Link>
-          <Link to="/calendar" style={styles.navLink}>Calendar</Link>
-           {(user?.role === 'admin') && (
-             <Link to="/records" style={styles.navLink}>Records</Link>
-           )}
-           <Link to="/incidents" style={styles.navLink}>Incidents</Link>
-          <Link to="/profile" style={styles.avatar}>{user?.username?.charAt(0).toUpperCase()}</Link>
+
+        <div className="navbar__tools">
+          <button
+            className="navbar__utility-button"
+            type="button"
+            onClick={toggleTheme}
+            aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+          >
+            <span aria-hidden="true">{theme === 'light' ? 'Dark' : 'Light'}</span>
+          </button>
+          {installPrompt && (
+            <button className="navbar__utility-button navbar__install-button" type="button" onClick={installApp}>
+              Install app
+            </button>
+          )}
+          <button
+            className="navbar__menu-button"
+            type="button"
+            onClick={() => setMenuOpen((current) => !current)}
+            aria-controls="primary-navigation"
+            aria-expanded={menuOpen}
+            aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          >
+            <span aria-hidden="true">{menuOpen ? 'Close' : 'Menu'}</span>
+          </button>
+        </div>
+
+        <nav className={`navbar__nav${menuOpen ? ' navbar__nav--open' : ''}`} id="primary-navigation" aria-label="Primary navigation">
+          {NAV_ITEMS.map((item) => {
+            const isAdminRoute = item.to === '/records';
+            if (isAdminRoute && user?.role !== 'admin') return null;
+            const isActive = location.pathname === item.to;
+            return (
+              <Link
+                className={`navbar__link${isActive ? ' navbar__link--active' : ''}`}
+                key={item.to}
+                to={item.to}
+                onClick={closeMenu}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+          <Link
+            className={`navbar__avatar${location.pathname === '/profile' ? ' navbar__link--active' : ''}`}
+            to="/profile"
+            onClick={closeMenu}
+            aria-label={`View profile for ${user?.username || 'user'}`}
+            aria-current={location.pathname === '/profile' ? 'page' : undefined}
+          >
+            <span aria-hidden="true">{user?.username?.charAt(0).toUpperCase() || '?'}</span>
+          </Link>
         </nav>
       </div>
     </header>
   );
 }
-
-const styles = {
-  navbar: {
-    position: 'sticky', top: 0, zIndex: 50, backgroundColor: '#fff', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
-  },
-  inner: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: '1200px', margin: '0 auto', padding: '0 24px', height: '64px' },
-  brand: { display: 'flex', alignItems: 'center', gap: '10px', fontWeight: '700', fontSize: '18px', color: '#0f172a', textDecoration: 'none' },
-  brandMark: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#F97316', color: '#fff', fontSize: '11px', fontWeight: '700' },
-  nav: { display: 'flex', alignItems: 'center', gap: '16px' },
-  navLink: { fontSize: '14px', fontWeight: '500', color: '#374151', textDecoration: 'none', padding: '6px 10px', borderRadius: '6px' },
-  avatar: { width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#F97316', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '600', fontSize: '14px', textDecoration: 'none' },
-};

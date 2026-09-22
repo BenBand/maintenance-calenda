@@ -1,21 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth, apiFetch } from '../services/auth';
-import Login from './Login';
+import { Suspense } from 'react';
+import { Navigate, Outlet } from 'react-router-dom';
 import Navbar from './Navbar';
+import { PageLoader } from './AsyncState';
+import { useAuth } from '../services/auth';
 
-export default function ProtectedLayout({ children }) {
-  const { token } = useAuth();
-  if (!token) return <Login />;
+export default function ProtectedLayout() {
+  const { token, ready } = useAuth();
+
+  if (!ready) return <PageLoader label="Checking session..." />;
+  if (!token) return <Navigate to="/login" replace />;
+
   return (
     <>
       <Navbar />
-      <main style={styles.main}>{children}</main>
-      <div className="watermark" />
+      <main className="app-main" id="main-content" tabIndex="-1">
+        <Suspense fallback={<PageLoader label="Loading page..." />}>
+          <Outlet />
+        </Suspense>
+      </main>
+      <div className="watermark" aria-hidden="true" />
     </>
   );
 }
-
-const styles = {
-  main: { minHeight: 'calc(100vh - 64px)', position: 'relative', zIndex: 1, padding: '24px', maxWidth: '1200px', margin: '0 auto' },
-};

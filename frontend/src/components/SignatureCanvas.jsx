@@ -1,69 +1,104 @@
-import React, { useRef, useState, useEffect } from 'react';
+import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState } from 'react';
 
-export default function SignatureCanvas({ onSave, width = 400, height = 200 }) {
+const SignatureCanvas = forwardRef(function SignatureCanvas({ onChange, onSave, width = 600, height = 240 }, ref) {
   const canvasRef = useRef(null);
-  const [ctx, setCtx] = useState(null);
-  const [drawing, setDrawing] = useState(false);
+  const contextRef = useRef(null);
+  const drawingRef = useRef(false);
+  const hasSignedRef = useRef(false);
   const [hasSigned, setHasSigned] = useState(false);
+  const hintId = useId();
 
   useEffect(() => {
-    if (canvasRef.current) {
-      const c = canvasRef.current.getContext('2d');
-      c.strokeStyle = '#1f2937';
-      c.lineWidth = 2;
-      c.lineCap = 'round';
-      c.lineJoin = 'round';
-      setCtx(c);
-    }
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    context.strokeStyle = 'currentColor';
+    context.lineWidth = 2;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    contextRef.current = context;
   }, []);
 
-  const getPos = (e) => {
+  const getPos = (event) => {
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-    return { x, y };
+    const source = event.touches?.[0] || event.changedTouches?.[0] || event;
+    return {
+      x: ((source.clientX - rect.left) / rect.width) * canvas.width,
+      y: ((source.clientY - rect.top) / rect.height) * canvas.height,
+    };
   };
 
-  const startDraw = (e) => {
-    e.preventDefault();
-    setDrawing(true);
+  const startDraw = (event) => {
+    event.preventDefault();
+    const context = contextRef.current;
+    if (!context) return;
+    drawingRef.current = true;
+    hasSignedRef.current = true;
     setHasSigned(true);
-    const { x, y } = getPos(e.touches ? e.touches[0] : e);
-    ctx.beginPath();
-    ctx.moveTo(x, y);
+    const { x, y } = getPos(event);
+    context.beginPath();
+    context.moveTo(x, y);
   };
 
-  const draw = (e) => {
-    if (!drawing) return;
-    e.preventDefault();
-    const { x, y } = getPos(e.touches ? e.touches[0] : e);
-    ctx.lineTo(x, y);
-    ctx.stroke();
+  const draw = (event) => {
+    if (!drawingRef.current) return;
+    event.preventDefault();
+    const context = contextRef.current;
+    if (!context) return;
+    const { x, y } = getPos(event);
+    context.lineTo(x, y);
+    context.stroke();
   };
 
-  const stopDraw = () => { setDrawing(false); };
-
-  const clear = () => {
-    if (ctx) {
-      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-      setHasSigned(false);
-    }
+  const stopDraw = () => {
+    if (!drawingRef.current) return;
+    drawingRef.current = false;
+    const data = save();
+    onSave?.(data);
+    onChange?.(data);
   };
 
   const save = () => {
-    if (canvasRef.current) {
-      return canvasRef.current.toDataURL('image/png');
-    }
-    return null;
+    if (!canvasRef.current || !hasSignedRef.current) return null;
+    return canvasRef.current.toDataURL('image/png');
   };
 
+  const clear = () => {
+    const canvas = canvasRef.current;
+    const context = contextRef.current;
+    if (!canvas || !context) return;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    drawingRef.current = false;
+    hasSignedRef.current = false;
+    setHasSigned(false);
+    onSave?.(null);
+    onChange?.(null);
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      event.preventDefault();
+      clear();
+    }
+  };
+
+  useImperativeHandle(ref, () => ({ clear, getData: save, isEmpty: () => !hasSignedRef.current }), []);
+
   return (
-    <div style={styles.container}>
+    <div className="signature-canvas">
       <canvas
         ref={canvasRef}
         width={width}
         height={height}
+        className="signature-canvas__pad"
+        role="img"
+        aria-label="Signature pad. Use a mouse, stylus, or touch to draw your signature."
+        aria-describedby={hintId}
+        aria-keyshortcuts="Delete Backspace"
+        tabIndex="0"
+        onKeyDown={handleKeyDown}
         onMouseDown={startDraw}
         onMouseMove={draw}
         onMouseUp={stopDraw}
@@ -71,15 +106,14 @@ export default function SignatureCanvas({ onSave, width = 400, height = 200 }) {
         onTouchStart={startDraw}
         onTouchMove={draw}
         onTouchEnd={stopDraw}
-        style={{ ...styles.canvas, border: '1px solid #d1d5db', borderRadius: '8px', cursor: 'crosshair', backgroundColor: '#fefefe' }}
+        onTouchCancel={stopDraw}
       />
-      <div style={styles.hint}>Draw your signature here</div>
+      <div className="signature-canvas__controls">
+        <span className="field-hint" id={hintId}>{hasSigned ? 'Signature captured' : 'Draw your signature here'}</span>
+        <button className="button button--secondary button--small" type="button" onClick={clear} disabled={!hasSigned}>Clear</button>
+      </div>
     </div>
   );
-}
+});
 
-const styles = {
-  container: { position: 'relative', display: 'inline-block' },
-  canvas: { display: 'block' },
-  hint: { fontSize: '12px', color: '#9ca3af', marginTop: '4px', textAlign: 'center' },
-};
+export default SignatureCanvas;
