@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const compression = require('compression');
 const path = require('path');
+const fs = require('fs');
 const helmet = require('helmet');
 require('dotenv').config();
 
@@ -92,14 +93,29 @@ app.get('/api/health', (req, res) => {
 });
 
 const frontendDist = path.join(__dirname, '../../frontend/dist');
-app.use(express.static(frontendDist));
+const frontendBuilt = fs.existsSync(frontendDist) && fs.existsSync(path.join(frontendDist, 'index.html'));
 
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api')) {
-    return next();
-  }
-  res.sendFile(path.join(frontendDist, 'index.html'));
-});
+if (frontendBuilt) {
+  app.use(express.static(frontendDist));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+} else {
+  // Frontend build is not available (e.g. build failed or dist/ is not
+  // committed). Keep serving the API instead of crashing at startup.
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
+    res.status(503).json({
+      error: 'Frontend not built',
+      message: 'The frontend build is not available. The API is still running at /api.',
+    });
+  });
+}
 
 async function startServer() {
   app.listen(PORT, '0.0.0.0', () => {
