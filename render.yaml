@@ -30,12 +30,6 @@ services:
       - key: DATABASE_URL
         database: maintenance_db
       - key: CLIENT_ORIGIN
-        value: https://your-custom-domain.com
-      - key: ADMIN_USERNAME
-        value: admin
-      - key: ADMIN_PASSWORD
-        value: change-me-on-first-login
-      - key: ADMIN_EMAIL
-        value: admin@example.com
+        sync: false
       - key: VITE_API_URL
-        value: https://your-custom-domain.com
+        sync: false

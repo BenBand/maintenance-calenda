@@ -10,8 +10,26 @@ function base64ToBytea(base64) {
   return { mimeType, data: Buffer.from(data, 'base64') };
 }
 
+function toNumeric(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+const RECORD_SELECT = `SELECT sr.*, s.date, s.scheduled_at, s.asset_type, s.asset_identifier, s.department, s.room,
+        s.duration_minutes, a.asset_identifier AS registry_asset_identifier,
+        u.username as signed_by_name, cr.username as created_by_name
+ FROM service_records sr
+ LEFT JOIN maintenance_schedules s ON sr.schedule_id = s.id
+ LEFT JOIN assets a ON sr.asset_id = a.id
+ LEFT JOIN users u ON sr.signed_by_user_id = u.id
+ LEFT JOIN users cr ON sr.created_by = cr.id`;
+
 async function createServiceRecord(req, res) {
-  const { schedule_id, work_performed, outcome, follow_up, signer_name, signer_date, signature_data } = req.body;
+  const {
+    schedule_id, work_performed, outcome, follow_up, signer_name, signer_date, signature_data,
+    labor_cost, parts_cost, downtime_minutes, asset_id,
+  } = req.body;
   const userId = req.user.id;
   if (!schedule_id || !work_performed) {
     return res.status(400).json({ error: 'Schedule ID and work performed are required' });
@@ -21,6 +39,7 @@ async function createServiceRecord(req, res) {
     if (scheduleResult.rows.length === 0) {
       return res.status(404).json({ error: 'Maintenance schedule not found' });
     }
+    const schedule = scheduleResult.rows[0];
 
     let signedByUserId = null;
     if (signer_name) {
@@ -30,14 +49,28 @@ async function createServiceRecord(req, res) {
       }
     }
 
+    // Keep the registry and the schedule in step so lifecycle history and
+    // uptime reporting stay attributable to a real asset.
+    const resolvedAssetId = asset_id || schedule.asset_id || null;
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
       const recordResult = await client.query(
-        `INSERT INTO service_records (schedule_id, work_performed, outcome, follow_up, signer_name, signer_date, signed_by_user_id, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [schedule_id, work_performed, outcome || null, follow_up || null, signer_name || null, signer_date || null, signedByUserId, userId]
+        `INSERT INTO service_records
+          (schedule_id, work_performed, outcome, follow_up, signer_name, signer_date, signed_by_user_id,
+           labor_cost, parts_cost, downtime_minutes, asset_id, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+        [
+          schedule_id, work_performed, outcome || null, follow_up || null, signer_name || null,
+          signer_date || null, signedByUserId,
+          toNumeric(labor_cost), toNumeric(parts_cost),
+          downtime_minutes === undefined || downtime_minutes === null || downtime_minutes === ''
+            ? null
+            : Math.max(0, parseInt(downtime_minutes, 10) || 0),
+          resolvedAssetId, userId,
+        ]
       );
       const record = recordResult.rows[0];
 
@@ -53,6 +86,22 @@ async function createServiceRecord(req, res) {
       }
 
       await client.query('UPDATE maintenance_schedules SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', ['completed', schedule_id]);
+
+      if (resolvedAssetId) {
+        await client.query(
+          `INSERT INTO asset_events (asset_id, event_type, event_date, description, cost, performed_by, to_status, created_by)
+           VALUES ($1, 'maintenance', $2::date, $3, $4, $5, 'in_service', $6)`,
+          [
+            resolvedAssetId,
+            (record.created_at || new Date()).toISOString().slice(0, 10),
+            work_performed.slice(0, 2000),
+            Number(record.total_cost) || 0,
+            schedule.technician,
+            userId,
+          ]
+        );
+      }
+
       await client.query('COMMIT');
 
       await logMaintenanceAudit(req, 'CREATE_SERVICE', 'service', record.id, { schedule_id, outcome }, userId);
@@ -70,26 +119,40 @@ async function createServiceRecord(req, res) {
 }
 
 async function getServiceRecords(req, res) {
-  const { schedule_id, page, limit } = req.query;
-  const offset = ((page || 1) - 1) * (limit || 25);
+  const { schedule_id, asset_id, department, technician, from, to, page, limit } = req.query;
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+  const offset = (pageNum - 1) * limitNum;
+
   const conditions = [];
   const params = [];
-  if (schedule_id) { conditions.push(`sr.schedule_id = $${params.length + 1}`); params.push(schedule_id); }
+  let idx = 1;
+
+  if (schedule_id) { conditions.push(`sr.schedule_id = $${idx++}`); params.push(schedule_id); }
+  if (asset_id) { conditions.push(`sr.asset_id = $${idx++}`); params.push(asset_id); }
+  if (department) { conditions.push(`s.department = $${idx++}`); params.push(department); }
+  if (technician) { conditions.push(`s.technician ILIKE $${idx++}`); params.push(`%${technician}%`); }
+  if (from && !Number.isNaN(Date.parse(from))) { conditions.push(`s.scheduled_at >= $${idx++}::timestamptz`); params.push(new Date(from).toISOString()); }
+  if (to && !Number.isNaN(Date.parse(to))) { conditions.push(`s.scheduled_at < $${idx++}::timestamptz`); params.push(new Date(to).toISOString()); }
+
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
   try {
-    const countResult = await pool.query(`SELECT COUNT(*) FROM service_records sr ${whereClause}`, params);
-    const total = parseInt(countResult.rows[0].count);
-    const result = await pool.query(
-      `SELECT sr.*, s.date, s.scheduled_at, s.asset_type, s.asset_identifier, s.department, s.room,
-              u.username as signed_by_name, cr.username as created_by_name
-       FROM service_records sr
-       LEFT JOIN maintenance_schedules s ON sr.schedule_id = s.id
-       LEFT JOIN users u ON sr.signed_by_user_id = u.id
-       LEFT JOIN users cr ON sr.created_by = cr.id
-       ${whereClause} ORDER BY sr.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-      [...params, limit || 25, offset]
+    const countResult = await pool.query(
+      `SELECT count(*) FROM service_records sr
+       LEFT JOIN maintenance_schedules s ON sr.schedule_id = s.id ${whereClause}`,
+      params
     );
-    res.json({ data: result.rows, pagination: { total, page: parseInt(page || 1), limit: parseInt(limit || 25) } });
+    const total = parseInt(countResult.rows[0].count, 10);
+    const result = await pool.query(
+      `${RECORD_SELECT}
+       ${whereClause} ORDER BY sr.created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+      [...params, limitNum, offset]
+    );
+    res.json({
+      data: result.rows,
+      pagination: { total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) || 1 },
+    });
   } catch (error) {
     console.error('Get service records error:', error);
     res.status(500).json({ error: 'Failed to fetch service records' });
@@ -99,16 +162,7 @@ async function getServiceRecords(req, res) {
 async function getServiceRecordById(req, res) {
   const { id } = req.params;
   try {
-    const recordResult = await pool.query(
-      `SELECT sr.*, s.date, s.scheduled_at, s.asset_type, s.asset_identifier, s.department, s.room,
-              u.username as signed_by_name, cr.username as created_by_name
-       FROM service_records sr
-       LEFT JOIN maintenance_schedules s ON sr.schedule_id = s.id
-       LEFT JOIN users u ON sr.signed_by_user_id = u.id
-       LEFT JOIN users cr ON sr.created_by = cr.id
-       WHERE sr.id = $1`,
-      [id]
-    );
+    const recordResult = await pool.query(`${RECORD_SELECT} WHERE sr.id = $1`, [id]);
     if (recordResult.rows.length === 0) {
       return res.status(404).json({ error: 'Service record not found' });
     }
@@ -134,7 +188,10 @@ async function getServiceRecordById(req, res) {
 
 async function updateServiceRecord(req, res) {
   const { id } = req.params;
-  const { work_performed, outcome, follow_up, signer_name, signer_date, signature_data } = req.body;
+  const {
+    work_performed, outcome, follow_up, signer_name, signer_date, signature_data,
+    labor_cost, parts_cost, downtime_minutes, asset_id,
+  } = req.body;
   const userId = req.user.id;
   try {
     const existing = await pool.query('SELECT * FROM service_records WHERE id = $1', [id]);
@@ -150,6 +207,13 @@ async function updateServiceRecord(req, res) {
     if (follow_up !== undefined) { updates.push(`follow_up = $${idx++}`); values.push(follow_up); }
     if (signer_name !== undefined) { updates.push(`signer_name = $${idx++}`); values.push(signer_name); }
     if (signer_date !== undefined) { updates.push(`signer_date = $${idx++}`); values.push(signer_date); }
+    if (labor_cost !== undefined) { updates.push(`labor_cost = $${idx++}`); values.push(toNumeric(labor_cost)); }
+    if (parts_cost !== undefined) { updates.push(`parts_cost = $${idx++}`); values.push(toNumeric(parts_cost)); }
+    if (downtime_minutes !== undefined) {
+      updates.push(`downtime_minutes = $${idx++}`);
+      values.push(downtime_minutes === null || downtime_minutes === '' ? null : Math.max(0, parseInt(downtime_minutes, 10) || 0));
+    }
+    if (asset_id !== undefined) { updates.push(`asset_id = $${idx++}`); values.push(asset_id || null); }
 
     let signedByUserId = existing.rows[0].signed_by_user_id;
     if (signer_name !== undefined && signer_name !== existing.rows[0].signer_name) {
@@ -189,16 +253,7 @@ async function updateServiceRecord(req, res) {
 
       await client.query('COMMIT');
 
-      const result = await client.query(
-        `SELECT sr.*, s.date, s.scheduled_at, s.asset_type, s.asset_identifier, s.department, s.room,
-                u.username as signed_by_name, cr.username as created_by_name
-         FROM service_records sr
-         LEFT JOIN maintenance_schedules s ON sr.schedule_id = s.id
-         LEFT JOIN users u ON sr.signed_by_user_id = u.id
-         LEFT JOIN users cr ON sr.created_by = cr.id
-         WHERE sr.id = $1`,
-        [id]
-      );
+      const result = await client.query(`${RECORD_SELECT} WHERE sr.id = $1`, [id]);
 
       await logMaintenanceAudit(req, 'UPDATE_SERVICE', 'service', id, { outcome }, userId);
       res.json(result.rows[0]);

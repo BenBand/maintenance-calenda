@@ -1,3 +1,5 @@
+import { syncPendingMutations } from './services/api';
+
 export function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
 
@@ -7,5 +9,11 @@ export function registerServiceWorker() {
 
   window.addEventListener('load', () => {
     navigator.serviceWorker.register(serviceWorkerUrl).catch(() => {});
+  });
+
+  // The worker cannot read the session token, so it delegates replaying the
+  // offline outbox back to the page.
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'FLUSH_OUTBOX') syncPendingMutations().catch(() => {});
   });
 }

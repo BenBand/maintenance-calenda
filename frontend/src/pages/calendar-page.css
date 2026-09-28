@@ -1,0 +1,77 @@
+/* Calendar page specific layout. The grid and time-slot styles live in
+   ../components/schedule.css. */
+
+.calendar-card {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+}
+
+.row--conflict {
+  background: var(--danger-soft);
+}
+
+.row--conflict td {
+  border-color: var(--danger);
+}
+
+/* On narrow screens the slot table becomes a stack of cards so a technician
+   can read and act on one job at a time on a phone. */
+@media (max-width: 700px) {
+  .calendar-card {
+    padding: 0.75rem;
+    border-radius: var(--radius-md);
+  }
+
+  .calendar-page .data-table thead {
+    display: none;
+  }
+
+  .calendar-page .data-table,
+  .calendar-page .data-table tbody,
+  .calendar-page .data-table tr,
+  .calendar-page .data-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .calendar-page .data-table tr {
+    margin-bottom: 0.625rem;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .calendar-page .data-table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.4375rem 0.75rem;
+    border: none;
+    border-bottom: 1px solid var(--border-soft);
+    text-align: right;
+  }
+
+  .calendar-page .data-table td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    text-align: left;
+  }
+
+  .calendar-page .data-table td:last-child {
+    border-bottom: none;
+  }
+
+  .calendar-page .table-actions {
+    justify-content: flex-end;
+  }
+}

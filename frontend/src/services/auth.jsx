@@ -8,6 +8,7 @@ import {
   readResponseJson,
   setSession,
 } from './api';
+import { hasPermission } from './permissions';
 
 const AuthContext = createContext(null);
 
@@ -106,8 +107,13 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  const can = useCallback(
+    (permission) => hasPermission(user?.role, permission),
+    [user?.role]
+  );
+
   return (
-    <AuthContext.Provider value={{ token, csrfToken, refreshToken, user, login, logout, ready }}>
+    <AuthContext.Provider value={{ token, csrfToken, refreshToken, user, login, logout, ready, can }}>
       {children}
     </AuthContext.Provider>
   );

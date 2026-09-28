@@ -1,0 +1,232 @@
+/* Mobile-first shell: bottom tab bar, offline and update notices, the slot
+   picker, and table-to-card collapsing. Desktop keeps the top nav and
+   full-width tables, so most of this is hidden above the tablet breakpoint. */
+
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: none;
+  justify-content: space-around;
+  align-items: stretch;
+  gap: 2px;
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface);
+  border-top: 1px solid var(--border-soft);
+  box-shadow: 0 -2px 12px rgba(15, 23, 42, 0.08);
+}
+
+.bottom-nav__tab {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  /* Comfortable touch target on a phone in the field. */
+  min-height: 48px;
+  padding: 4px 2px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  text-align: center;
+}
+
+.bottom-nav__tab:hover,
+.bottom-nav__tab:focus-visible {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.bottom-nav__tab--active {
+  color: var(--primary);
+  background: var(--primary-soft, var(--surface-muted));
+}
+
+.bottom-nav__icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.bottom-nav__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.offline-banner,
+.update-prompt {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.offline-banner {
+  background: var(--warning-soft);
+  color: #92400e;
+  border-bottom: 1px solid var(--warning, #f59e0b);
+}
+
+.update-prompt {
+  background: var(--primary, #1d4ed8);
+  color: #ffffff;
+}
+
+/* Slot picker inside the schedule form. */
+.slot-picker {
+  margin-top: 12px;
+}
+
+.slot-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.slot-picker__option {
+  min-height: 40px;
+  padding: 6px 4px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.slot-picker__option:hover:not(:disabled),
+.slot-picker__option:focus-visible {
+  border-color: var(--primary);
+  background: var(--primary-soft, var(--surface-muted));
+}
+
+.slot-picker__option--selected {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.slot-picker__option--busy,
+.slot-picker__option--blocked {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+
+.slot-picker__option--blocked {
+  background: var(--danger-soft);
+  color: var(--danger);
+  text-decoration: none;
+}
+
+/* Every data table in the app becomes a card list on a phone. The label comes
+   from each cell's data-label attribute, set by the pages. */
+@media (max-width: 700px) {
+  .app-main {
+    /* Clear the fixed tab bar so the last row is never hidden behind it. */
+    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .bottom-nav {
+    display: flex;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .data-table--responsive thead {
+    display: none;
+  }
+
+  .data-table--responsive,
+  .data-table--responsive tbody,
+  .data-table--responsive tr,
+  .data-table--responsive td {
+    display: block;
+    width: 100%;
+  }
+
+  .data-table--responsive tr {
+    margin-bottom: 10px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .data-table--responsive td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 12px;
+    border: none;
+    border-bottom: 1px solid var(--border-soft);
+    text-align: right;
+  }
+
+  .data-table--responsive td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    text-align: left;
+  }
+
+  .data-table--responsive td:last-child {
+    border-bottom: none;
+  }
+
+  .data-table--responsive .table-actions {
+    justify-content: flex-end;
+  }
+
+  /* The tab bar replaces the collapsed menu, so hide its duplicate. */
+  .navbar__nav {
+    padding-bottom: 72px;
+  }
+
+  .modal__content {
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+
+  .form-actions {
+    position: sticky;
+    bottom: 0;
+    gap: 8px;
+  }
+
+  .form-actions .button {
+    flex: 1 1 0;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 400px) {
+  .bottom-nav__label {
+    font-size: 10px;
+  }
+}

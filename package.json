@@ -1,1 +1,17 @@
-{"name": "maintenance-calendar","version": "1.0.0","description": "Lusaka City Council Maintenance Calendar","private": true,"scripts": {"dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"","dev:backend": "cd backend && npm run dev","dev:frontend": "cd frontend && npm run dev","build": "cd frontend && npm run build","start": "cd backend && npm start","check": "cd backend && node --check src/index.js && node --check src/controllers/authController.js && node --check src/controllers/incidentController.js && node --check src/controllers/maintenanceController.js && node --check src/controllers/serviceController.js && node --check src/middleware/auth.js && node --check src/middleware/audit.js && node --check src/middleware/csrf.js && node --check src/middleware/rateLimits.js && node --check src/middleware/validate.js && node --check src/middleware/validateEnv.js && node --check src/models/tables.js && node --check src/routes/auth.js && node --check src/routes/incidents.js && node --check src/routes/maintenance.js && node --check src/routes/services.js && node --check src/config/database.js && node --check src/utils/bcrypt.js && node --check src/utils/pagination.js && node --check src/seed.js"}, "devDependencies": {"concurrently": "^8.2.2"}}
+{
+  "name": "maintenance-calendar",
+  "version": "1.0.0",
+  "description": "Lusaka City Council Maintenance Calendar",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "cd backend && npm start",
+    "check": "cd backend && npm run check"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

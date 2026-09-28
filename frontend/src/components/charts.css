@@ -1,0 +1,187 @@
+/* Charts for the analytics dashboard. Tokens come from index.css so the
+   light/dark themes apply without a second palette. */
+
+.chart {
+  margin: 0;
+  width: 100%;
+}
+
+.chart__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.chart__svg--donut {
+  max-width: 200px;
+  margin: 0 auto;
+}
+
+.chart__gridline {
+  stroke: var(--border-soft);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart__axis-label {
+  fill: var(--text-muted);
+  font-size: 10px;
+  font-family: inherit;
+}
+
+.chart__bar {
+  transition: opacity 0.15s ease;
+}
+
+.chart__bar:hover {
+  opacity: 0.75;
+}
+
+.chart__line {
+  fill: none;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart__area {
+  opacity: 0.12;
+  stroke: none;
+}
+
+.chart__point {
+  stroke: var(--surface);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart__slice {
+  stroke: var(--surface);
+  stroke-width: 1.5;
+  transition: opacity 0.15s ease;
+}
+
+.chart__slice:hover {
+  opacity: 0.8;
+}
+
+.chart__center-value {
+  fill: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+  font-family: inherit;
+}
+
+.chart__center-label {
+  fill: var(--text-muted);
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.chart__legend--stacked {
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.chart__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.chart__swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+
+.chart__legend--stacked .chart__legend-label {
+  flex: 1 1 auto;
+  color: var(--text);
+}
+
+.chart__legend-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.chart__legend-share {
+  font-variant-numeric: tabular-nums;
+  min-width: 3.5rem;
+  text-align: right;
+}
+
+.chart-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  background: var(--surface-muted);
+  border: 1px dashed var(--border-soft);
+  border-radius: var(--radius-md);
+}
+
+/* Meters ------------------------------------------------------------------ */
+
+.meter {
+  display: block;
+}
+
+.meter__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+}
+
+.meter__label {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.meter__value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.meter__track {
+  height: 8px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.meter__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  transition: width 0.3s ease;
+}
+
+.meter__fill--success { background: var(--success); }
+.meter__fill--danger { background: var(--danger); }
+.meter__fill--warning { background: var(--warning, #f59e0b); }
+.meter__fill--info { background: var(--info); }
+
+.meter__hint {
+  margin: 0.375rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}

@@ -1,10 +1,14 @@
 # Dependencies
 node_modules/
 
-# Environment files
+# Environment files - these hold DATABASE_URL credentials, JWT_SECRET,
+# AUDIT_IP_SALT and every other secret. Only the .example templates are
+# committed, so keep the negations at the bottom of this block.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
+.envrc
 
 # Build outputs
 dist/
@@ -32,8 +36,62 @@ Thumbs.db
 coverage/
 .nyc_output/
 
-# Misc
+# Keys, certificates and credentials
 *.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.truststore
+*.crt
+*.cer
+*.der
+*.asc
+*.gpg
+*.pgp
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+*.ppk
+
+# Cloud and package registry credentials
+.netrc
+.npmrc
+.pnpmrc
+.aws/
+.gcloud/
+.azure/
+.firebase/
+service-account*.json
+*serviceAccount*.json
+credentials.json
+gha-creds-*.json
+
+# Secret material committed under a descriptive name
+secrets/
+secrets.*
+*.secret
+*.secrets
+*.token
+*.password
+*.passwd
+
+# Local databases and dumps
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.bak
+
+# Misc
 .cache/
+.tmp/
+tmp/
+
+# Local agent/editor worktrees and scratch state
+.kilo/worktrees/
+.agent/
 
 # backend/database/schema.sql

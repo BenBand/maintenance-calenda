@@ -5,7 +5,9 @@ import { AuthProvider } from './services/auth';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ThemeProvider } from './components/ThemeProvider';
 import { registerServiceWorker } from './pwa';
+import { startOfflineSync } from './services/api';
 import './index.css';
+import './components/mobile.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <>
@@ -22,4 +24,5 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </>
 );
 
+startOfflineSync();
 registerServiceWorker();

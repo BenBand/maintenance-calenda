@@ -1,4 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api';
+import {
+  clearCache, enqueueMutation, flushQueue, isOnline, jsonResponse, readCache, writeCache,
+} from './offline';
 
 const TOKEN_KEY = 'token';
 const CSRF_TOKEN_KEY = 'csrfToken';
@@ -63,6 +66,9 @@ export function setSession(session) {
   const storage = getStorage();
   const current = getSession();
   const next = { ...current, ...session };
+  // The response cache is scoped to whoever is signed in; a different user (or
+  // a fresh login after logout) must not read the previous user's data.
+  if (session && session.token && session.token !== current.token) clearCache();
 
   if (storage) {
     Object.entries(next).forEach(([key, value]) => {
@@ -83,6 +89,7 @@ export function clearSession() {
     storage.removeItem(CSRF_TOKEN_KEY);
     storage.removeItem(REFRESH_TOKEN_KEY);
   }
+  clearCache();
   notifySessionChange({ token: null, csrfToken: null, refreshToken: null });
   authAdapter?.clearCredentials?.();
 }
@@ -174,6 +181,27 @@ export async function readApiData(response) {
   return data || null;
 }
 
+/**
+ * Read a list out of a response that may be a bare array, a `{ data: [...] }`
+ * envelope, or an object with a named list such as
+ * `{ schedules: [...], recurrences: [...] }`.
+ *
+ * `readApiData` returns the envelope object for the last shape, so calling
+ * `.filter` on its result throws. Anything that renders a collection should
+ * use this instead and declare which keys may hold the list.
+ */
+export async function readApiArray(response, ...keys) {
+  const data = await readResponseJson(response);
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== 'object') return [];
+
+  for (const key of keys) {
+    if (Array.isArray(data[key])) return data[key];
+  }
+  if (Array.isArray(data.data)) return data.data;
+  return [];
+}
+
 function createRequestContext(url, options, config, legacyToken, legacyCsrfToken) {
   const requestOptions = { ...options };
   const method = String(requestOptions.method || 'GET').toUpperCase();
@@ -261,6 +289,9 @@ function canReplayBody(body) {
 function canRetry(context, response) {
   if (context.attempt >= getMaxRetries(context)) return false;
   if (context.options.signal?.aborted) return false;
+  // Retrying a request we already know cannot reach the network just delays
+  // the cached response or the queued write.
+  if (!isOnline()) return false;
   if (!canReplayBody(context.options.body)) return false;
   if (context.config.retry === true) return true;
   return RETRYABLE_METHODS.has(context.method);
@@ -402,6 +433,131 @@ async function handleErrorResponse(response, context) {
   throw new ApiError(message, { status: response.status, data, response });
 }
 
+export async function downloadPdf(url, filename) {
+  const response = await apiFetch(url, { method: 'GET' }, { retry: false });
+  if (!response.ok) {
+    const data = await readResponseJson(response);
+    throw new ApiError(getErrorMessage(data, response.status), { status: response.status, data, response });
+  }
+  const blob = await response.blob();
+  const downloadUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(downloadUrl);
+}
+
+const CACHEABLE_METHODS = new Set(['GET', 'HEAD']);
+const QUEUEABLE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+/** Methods whose reads are safe to serve from the last known good response. */
+function isCacheable(context) {
+  if (!CACHEABLE_METHODS.has(context.method)) return false;
+  if (context.config.noStore) return false;
+  // Never serve a cached body to the login or refresh endpoints.
+  if (context.url.includes('/auth/')) return false;
+  return true;
+}
+
+function canQueue(context) {
+  if (!QUEUEABLE_METHODS.has(context.method)) return false;
+  if (context.config.noQueue) return false;
+  if (context.config.skipAuth) return false;
+  // A queued write would replay with a stale CSRF token, so only the JSON
+  // payloads a page actually forms are eligible.
+  return typeof context.options.body === 'string';
+}
+
+function hasNetworkError(error) {
+  return error instanceof ApiError && error.status == null;
+}
+
+async function cacheSuccessfulRead(context, response) {
+  if (!isCacheable(context) || !response.ok || typeof response.clone !== 'function') return;
+  try {
+    const data = await readResponseJson(response.clone());
+    if (data != null) writeCache(context.method, resolveUrl(context.url), data);
+  } catch {
+    // A caching failure must never surface as a request failure.
+  }
+}
+
+function cachedResponse(context) {
+  const entry = readCache(context.method, resolveUrl(context.url));
+  if (!entry) return null;
+  return jsonResponse(entry.body, {
+    status: 200,
+    headers: { 'X-MCC-Cached-At': String(entry.savedAt) },
+  });
+}
+
+function queueMutation(context) {
+  const count = enqueueMutation({
+    url: context.url,
+    method: context.method,
+    body: context.options.body,
+  });
+  return jsonResponse(
+    { queued: true, pending: count, message: 'Saved offline. It will sync when you are back online.' },
+    { status: 202 },
+  );
+}
+
+/**
+ * Handle a transport failure. Reads fall back to the last cached response when
+ * one exists; writes are parked in the outbox. Anything else rethrows, so a
+ * genuine server error is never masked.
+ */
+function handleTransportFailure(context, error) {
+  if (!hasNetworkError(error)) throw error;
+
+  if (isCacheable(context)) {
+    const cached = cachedResponse(context);
+    if (cached) return cached;
+  }
+
+  if (!isOnline() && canQueue(context)) return queueMutation(context);
+
+  throw error;
+}
+
+/** Replay parked writes. Called on reconnect, on app start, and by sync. */
+export async function syncPendingMutations() {
+  return flushQueue(async (item) => {
+    const response = await apiFetch(
+      item.url,
+      { method: item.method, body: item.body },
+      { noQueue: true, retry: false },
+    );
+    if (!response.ok) {
+      const error = new ApiError(getErrorMessage(await readResponseJson(response), response.status), {
+        status: response.status,
+      });
+      // 4xx other than the throttling/timeout cases means the request itself is
+      // bad, so retrying it forever would wedge the queue behind it.
+      if (error.status >= 400 && error.status < 500 && ![408, 425, 429].includes(error.status)) {
+        error.permanent = true;
+      }
+      throw error;
+    }
+  });
+}
+
+let offlineSyncStarted = false;
+
+/** Attach the reconnect listener. Safe to call more than once. */
+export function startOfflineSync() {
+  if (offlineSyncStarted || typeof window === 'undefined') return;
+  offlineSyncStarted = true;
+  window.addEventListener('online', () => {
+    syncPendingMutations().catch(() => {});
+  });
+  if (isOnline()) syncPendingMutations().catch(() => {});
+}
+
 export async function apiFetch(url, options = {}, configOrToken = {}, legacyCsrfToken) {
   let config = configOrToken && typeof configOrToken === 'object' ? configOrToken : {};
   let legacyToken = typeof configOrToken === 'string' ? configOrToken : configOrToken?.token;
@@ -421,15 +577,21 @@ export async function apiFetch(url, options = {}, configOrToken = {}, legacyCsrf
 
     response = await runResponseInterceptors(response, context);
     if (!response.ok) return handleErrorResponse(response, context);
+    await cacheSuccessfulRead(context, response);
     return response;
   } catch (error) {
-    return runErrorInterceptors(error, context);
+    try {
+      return runErrorInterceptors(error, context);
+    } catch (finalError) {
+      return handleTransportFailure(context, finalError);
+    }
   }
 }
 
 export const apiClient = {
   fetch: apiFetch,
   request: apiFetch,
+  downloadPdf,
   getSession,
   setSession,
   clearSession,
@@ -442,6 +604,5 @@ export const apiClient = {
     error: errorInterceptorManager,
   },
 };
-
 export { API_BASE };
 export default apiClient;

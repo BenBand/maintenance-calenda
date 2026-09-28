@@ -8,9 +8,13 @@ require('dotenv').config();
 const { validateEnv } = require('./middleware/validateEnv');
 const { apiLimiter } = require('./middleware/rateLimits');
 const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/users');
 const maintenanceRoutes = require('./routes/maintenance');
 const serviceRoutes = require('./routes/services');
 const incidentRoutes = require('./routes/incidents');
+const assetRoutes = require('./routes/assets');
+const analyticsRoutes = require('./routes/analytics');
+const downtimeRoutes = require('./routes/downtime');
 
 validateEnv();
 
@@ -28,9 +32,14 @@ app.use(
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:'],
+        imgSrc: ["'self'", 'data:', 'blob:'],
         scriptSrc: ["'self'"],
-        connectSrc: ["'self'"],
+        // The PWA service worker performs its own fetches (including the
+        // offline API cache), so it needs an explicit worker-src and a
+        // connect-src that allows the API origin.
+        workerSrc: ["'self'", 'blob:'],
+        connectSrc: ["'self'", ...allowedOrigins],
+        manifestSrc: ["'self'"],
       },
     },
     xssFilter: true,
@@ -46,7 +55,9 @@ app.use(
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        const error = new Error('Not allowed by CORS');
+        error.status = 403;
+        callback(error);
       }
     },
     credentials: true,
@@ -57,12 +68,24 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  if (err?.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: 'Origin not allowed' });
+  }
+  next(err);
+});
+
 app.use('/api/', apiLimiter);
 
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/incidents', incidentRoutes);
+app.use('/api/assets', assetRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/downtime', downtimeRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

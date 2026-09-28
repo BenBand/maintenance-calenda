@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../services/auth';
+import { PERMISSIONS } from '../services/permissions';
 import { useTheme } from './ThemeProvider';
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard' },
-  { to: '/calendar', label: 'Calendar' },
-  { to: '/records', label: 'Records' },
-  { to: '/incidents', label: 'Incidents' },
+  { to: '/', label: 'Dashboard', shortLabel: 'Home', icon: '⌂' },
+  { to: '/calendar', label: 'Calendar', shortLabel: 'Slots', icon: '▤' },
+  { to: '/assets', label: 'Assets', shortLabel: 'Assets', icon: '◧', permission: PERMISSIONS.ASSET_READ },
+  { to: '/analytics', label: 'Analytics', shortLabel: 'Reports', icon: '◨', permission: PERMISSIONS.ANALYTICS_READ },
+  { to: '/records', label: 'Records', shortLabel: 'Records', icon: '✓', permission: PERMISSIONS.SERVICE_READ },
+  { to: '/incidents', label: 'Incidents', shortLabel: 'Issues', icon: '!', permission: PERMISSIONS.INCIDENT_READ },
+  { to: '/users', label: 'Users', shortLabel: 'Users', icon: '☰', permission: PERMISSIONS.USER_READ },
 ];
 
+export { NAV_ITEMS };
+
 export default function Navbar() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -76,8 +82,7 @@ export default function Navbar() {
 
         <nav className={`navbar__nav${menuOpen ? ' navbar__nav--open' : ''}`} id="primary-navigation" aria-label="Primary navigation">
           {NAV_ITEMS.map((item) => {
-            const isAdminRoute = item.to === '/records';
-            if (isAdminRoute && user?.role !== 'admin') return null;
+            if (item.permission && !can(item.permission)) return null;
             const isActive = location.pathname === item.to;
             return (
               <Link

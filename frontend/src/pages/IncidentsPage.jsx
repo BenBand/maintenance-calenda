@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useAuth } from '../services/auth';
+import { PERMISSIONS } from '../services/permissions';
 import { apiFetch, readApiData } from '../services/api';
 import { useApiData } from '../hooks/useApiData';
 import Modal from '../components/Modal';
@@ -10,7 +11,9 @@ const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 const STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
 
 export default function IncidentsPage() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
+  const canWriteIncidents = can(PERMISSIONS.INCIDENT_WRITE);
+  const canDeleteIncidents = can(PERMISSIONS.INCIDENT_DELETE);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ title: '', description: '', department: '', room: '', asset_type: '', asset_identifier: '', priority: 'medium', status: 'open' });
@@ -126,7 +129,7 @@ export default function IncidentsPage() {
           <h1 className="page-title">Incidents</h1>
           <p className="page-subtitle">Report and track maintenance incidents</p>
         </div>
-        <button className="button button--primary" type="button" onClick={() => setShowForm(true)}>+ Report Incident</button>
+        {canWriteIncidents && <button className="button button--primary" type="button" onClick={() => setShowForm(true)}>+ Report Incident</button>}
       </header>
 
       {(error || actionError) && <div className="inline-alert" role="alert"><span>{error || actionError}</span>{error && <button className="button button--secondary button--small" type="button" onClick={reload}>Retry</button>}</div>}
@@ -161,38 +164,40 @@ export default function IncidentsPage() {
       </div>
 
       <div className="table-wrap">
-        <table className="data-table">
+        <table className="data-table data-table--responsive">
           <caption className="sr-only">Maintenance incidents</caption>
           <thead>
-            <tr><th scope="col">Reported</th><th scope="col">Title</th><th scope="col">Description</th><th scope="col">Asset</th><th scope="col">Priority</th><th scope="col">Status</th><th scope="col">Reported By</th><th scope="col">Actions</th></tr>
+            <tr><th scope="col">Reported</th><th scope="col">Title</th><th scope="col">Description</th><th scope="col">Asset</th><th scope="col">Priority</th><th scope="col">Status</th><th scope="col">Reported By</th>{(canWriteIncidents || canDeleteIncidents) && <th scope="col">Actions</th>}</tr>
           </thead>
           <tbody>
             {filtered.map((incident) => (
               <tr key={incident.id}>
-                <td>{incident.created_at?.split('T')[0] || '-'}</td>
-                <td>{incident.title}</td>
-                <td>{incident.description?.substring(0, 60)}{incident.description?.length > 60 ? '...' : ''}</td>
-                <td>{incident.asset_type ? incident.asset_type.replace(/_/g, ' ') : '-'}</td>
-                <td><span className={`badge badge--${incident.priority}`}>{incident.priority}</span></td>
-                <td>
+                <td data-label="Reported">{incident.created_at?.split('T')[0] || '-'}</td>
+                <td data-label="Title">{incident.title}</td>
+                <td data-label="Description">{incident.description?.substring(0, 60)}{incident.description?.length > 60 ? '...' : ''}</td>
+                <td data-label="Asset">{incident.asset_type ? incident.asset_type.replace(/_/g, ' ') : '-'}</td>
+                <td data-label="Priority"><span className={`badge badge--${incident.priority}`}>{incident.priority}</span></td>
+                <td data-label="Status">
                   <label className="sr-only" htmlFor={`status-${incident.id}`}>Status for {incident.title}</label>
-                  <select className="status-select" id={`status-${incident.id}`} value={incident.status} onChange={(event) => handleQuickStatus(incident, event.target.value)} disabled={actionLoadingId === incident.id} aria-label={`Status for ${incident.title}`}>
+                  <select className="status-select" id={`status-${incident.id}`} value={incident.status} onChange={(event) => handleQuickStatus(incident, event.target.value)} disabled={!canWriteIncidents || actionLoadingId === incident.id} aria-label={`Status for ${incident.title}`}>
                     {STATUSES.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
                   </select>
                 </td>
-                <td>{incident.reported_by_name || user?.username}</td>
-                <td>
-                  <button className="button button--primary button--small" type="button" onClick={() => handleEdit(incident)} aria-label={`Edit incident ${incident.id}`}>Edit</button>
-                  <button className="button button--danger button--small" type="button" onClick={() => handleDelete(incident.id)} disabled={actionLoadingId === incident.id} aria-label={`Delete incident ${incident.id}`}>Delete</button>
-                </td>
+                <td data-label="Reported by">{incident.reported_by_name || user?.username}</td>
+                {(canWriteIncidents || canDeleteIncidents) && (
+                  <td data-label="Actions">
+                    {canWriteIncidents && <button className="button button--primary button--small" type="button" onClick={() => handleEdit(incident)} aria-label={`Edit incident ${incident.id}`}>Edit</button>}
+                    {canDeleteIncidents && <button className="button button--danger button--small" type="button" onClick={() => handleDelete(incident.id)} disabled={actionLoadingId === incident.id} aria-label={`Delete incident ${incident.id}`}>Delete</button>}
+                  </td>
+                )}
               </tr>
             ))}
-            {filtered.length === 0 && <tr><td colSpan="8"><EmptyState>No incidents found</EmptyState></td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={(canWriteIncidents || canDeleteIncidents) ? 8 : 7}><EmptyState>No incidents found</EmptyState></td></tr>}
           </tbody>
         </table>
       </div>
 
-      {showForm && (
+      {showForm && canWriteIncidents && (
         <Modal title={editingId ? 'Edit Incident' : 'Report Incident'} onClose={closeForm}>
           <form className="form-stack" onSubmit={handleSubmit} aria-busy={loading}>
             <div className="form-field">
