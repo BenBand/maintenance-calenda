@@ -10,10 +10,9 @@ services:
       npm install
       npm run build
     startCommand: |
-      cd backend
-      npm install
-      npm run migrate
-      npm start
+      npm install --prefix backend
+      npm run migrate --prefix backend
+      node backend/src/index.js
     envVars:
       - key: NODE_ENV
         value: production
