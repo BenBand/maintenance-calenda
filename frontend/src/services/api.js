@@ -20,6 +20,10 @@ function createInterceptorManager() {
   let nextId = 1;
 
   return {
+    // Exposed so runRequestInterceptors / runResponseInterceptors / runErrorInterceptors
+    // can iterate the registered handlers. Without this, `.handlers` was undefined
+    // and every request threw "Cannot read properties of undefined (reading 'values')".
+    handlers,
     use(handler) {
       if (typeof handler !== 'function') throw new TypeError('Interceptor must be a function');
       const id = nextId;

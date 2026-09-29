@@ -340,6 +340,53 @@ p {
   border-color: var(--danger);
 }
 
+/* Password field with a show/hide toggle (PasswordInput component). */
+.password-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+.password-input-wrap .input {
+  flex: 1;
+  padding-right: 44px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  height: calc(100% - 2px);
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  display: inline-flex;
+  align-items: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.password-toggle:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.password-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.password-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.password-toggle__icon {
+  display: inline-flex;
+}
+
 .form-stack {
   display: flex;
   flex-direction: column;

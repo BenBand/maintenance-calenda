@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../services/auth';
+import PasswordInput from '../components/PasswordInput';
 
 export default function Login() {
   const { login } = useAuth();
@@ -57,18 +58,14 @@ export default function Login() {
               autoComplete="username"
             />
           </div>
-          <div className="form-field">
-            <label className="field-label" htmlFor="password">Password</label>
-            <input
-              className="input"
-              id="password"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </div>
+          <PasswordInput
+            id="password"
+            label="Password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            autoComplete="current-password"
+          />
           <button className="button button--primary button--wide" type="submit" disabled={loading}>
             {loading ? 'Signing in...' : 'Sign In'}
           </button>

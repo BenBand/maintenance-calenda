@@ -4,6 +4,7 @@ import { PERMISSIONS } from '../services/permissions';
 import { apiFetch, readApiData } from '../services/api';
 import { useApiData } from '../hooks/useApiData';
 import Modal from '../components/Modal';
+import PasswordInput from '../components/PasswordInput';
 import { EmptyState, ErrorState, SkeletonPage } from '../components/AsyncState';
 
 const ROLES = ['admin', 'manager', 'staff'];
@@ -219,30 +220,21 @@ export default function UsersPage() {
               )}
             </div>
 
-            <div className="form-field">
-              <label className="field-label" htmlFor="user-password">
-                {editingUser ? 'New Password' : 'Password *'}
-              </label>
-              <input
-                className="input"
+            <PasswordInput
                 id="user-password"
-                type="password"
+                label={editingUser ? 'New Password' : 'Password *'}
                 value={form.password}
                 onChange={(event) => setForm({ ...form, password: event.target.value })}
                 required={!editingUser}
                 minLength={8}
                 maxLength={255}
                 autoComplete="new-password"
+                hint={editingUser ? 'Leave blank to keep the current password.' : undefined}
               />
-              {editingUser && <p className="field-hint">Leave blank to keep the current password.</p>}
-            </div>
 
-            <div className="form-field">
-              <label className="field-label" htmlFor="user-confirm-password">Confirm Password *</label>
-              <input
-                className="input"
+              <PasswordInput
                 id="user-confirm-password"
-                type="password"
+                label="Confirm Password *"
                 value={form.confirmPassword}
                 onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })}
                 required
@@ -250,7 +242,6 @@ export default function UsersPage() {
                 maxLength={255}
                 autoComplete="new-password"
               />
-            </div>
 
             <div className="form-actions">
               <button className="button button--secondary" type="button" onClick={closeForm}>Cancel</button>
