@@ -6,8 +6,8 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   max: parseInt(process.env.DB_POOL_MAX) || 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-  query_timeout: 10000,
+  connectionTimeoutMillis: 15000,
+  query_timeout: 15000,
 });
 
 pool.on('connect', () => {
