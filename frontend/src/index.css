@@ -237,6 +237,74 @@ p {
   text-transform: capitalize;
 }
 
+.text-muted {
+  color: var(--text-muted);
+}
+
+/* Star picker used when rating the IT team's fix for a reported issue. */
+.rating-input {
+  display: flex;
+  gap: 4px;
+}
+
+.rating-star {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.rating-star:hover,
+.rating-star:focus-visible {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.rating-star--active {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.rating-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rating-list__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.rating-list__stars {
+  color: var(--primary);
+  letter-spacing: 1px;
+}
+
+.rating-list__meta {
+  color: var(--text-muted);
+}
+
+.rating-list__comment {
+  flex-basis: 100%;
+  color: var(--text);
+}
+
 .button {
   display: inline-flex;
   min-height: 40px;

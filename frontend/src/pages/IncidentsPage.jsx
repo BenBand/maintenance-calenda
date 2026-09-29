@@ -9,11 +9,16 @@ import { EmptyState, ErrorState, SkeletonPage } from '../components/AsyncState';
 const ASSET_TYPES = ['laptop', 'desktop', 'network_equipment', 'printer'];
 const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 const STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
+// A fix can only be judged once the team has actually finished the work.
+const RATEABLE_STATUSES = ['resolved', 'closed'];
 
 export default function IncidentsPage() {
   const { user, can } = useAuth();
   const canWriteIncidents = can(PERMISSIONS.INCIDENT_WRITE);
   const canDeleteIncidents = can(PERMISSIONS.INCIDENT_DELETE);
+  const canRate = can(PERMISSIONS.RATING_WRITE);
+  const canReadRatings = can(PERMISSIONS.RATING_READ);
+
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ title: '', description: '', department: '', room: '', asset_type: '', asset_identifier: '', priority: 'medium', status: 'open' });
@@ -22,6 +27,13 @@ export default function IncidentsPage() {
   const [loading, setLoading] = useState(false);
   const [actionError, setActionError] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState(null);
+
+  const [ratingIncident, setRatingIncident] = useState(null);
+  const [ratingValue, setRatingValue] = useState(0);
+  const [ratingFeedback, setRatingFeedback] = useState('');
+  const [ratingError, setRatingError] = useState('');
+  const [ratingSaving, setRatingSaving] = useState(false);
+  const [ratingsByIncident, setRatingsByIncident] = useState({});
 
   const loadPage = useCallback(async () => {
     const [incidentsRes, departmentsRes] = await Promise.all([
@@ -37,6 +49,7 @@ export default function IncidentsPage() {
   const { data, loading: pageLoading, error, reload } = useApiData(loadPage);
   const incidents = data?.incidents || [];
   const departments = data?.departments || [];
+
   const filtered = incidents.filter((incident) => {
     if (filters.status && incident.status !== filters.status) return false;
     if (filters.priority && incident.priority !== filters.priority) return false;
@@ -44,6 +57,55 @@ export default function IncidentsPage() {
     if (filters.search && !(incident.title?.toLowerCase().includes(filters.search.toLowerCase()) || incident.description?.toLowerCase().includes(filters.search.toLowerCase()))) return false;
     return true;
   });
+
+  // Ratings arrive with the incident row (count + average). The full list is
+  // fetched only when someone opens the rating dialog for that incident.
+  const loadRatings = useCallback(async (incidentId) => {
+    if (!canReadRatings) return;
+    const response = await apiFetch(`/ratings/incident/${incidentId}`, {});
+    const payload = await readApiData(response);
+    setRatingsByIncident((current) => ({ ...current, [incidentId]: payload?.ratings || [] }));
+  }, [canReadRatings]);
+
+  const openRating = async (incident) => {
+    setActionError('');
+    setRatingError('');
+    setRatingValue(0);
+    setRatingFeedback('');
+    setRatingIncident(incident);
+    await loadRatings(incident.id);
+  };
+
+  const closeRating = () => {
+    setRatingIncident(null);
+    setRatingValue(0);
+    setRatingFeedback('');
+    setRatingError('');
+  };
+
+  const handleRateSubmit = async (event) => {
+    event.preventDefault();
+    if (!ratingIncident) return;
+    if (ratingValue < 1 || ratingValue > 5) {
+      setRatingError('Choose a rating from 1 to 5 stars');
+      return;
+    }
+    setRatingError('');
+    setRatingSaving(true);
+    try {
+      await apiFetch(`/ratings/incident/${ratingIncident.id}`, {
+        method: 'POST',
+        body: JSON.stringify({ rating: ratingValue, feedback: ratingFeedback || null }),
+      });
+      closeRating();
+      await loadRatings(ratingIncident.id);
+      await reload();
+    } catch (err) {
+      setRatingError(err.message || 'Unable to save rating');
+    } finally {
+      setRatingSaving(false);
+    }
+  };
 
   const validate = () => {
     const nextErrors = {};
@@ -122,12 +184,15 @@ export default function IncidentsPage() {
   if (pageLoading && !data) return <SkeletonPage label="Loading incidents..." />;
   if (error && !data) return <ErrorState message={error} onRetry={reload} />;
 
+  const showActions = canWriteIncidents || canDeleteIncidents || canRate;
+  const columnCount = 8 + (showActions ? 1 : 0) + 1;
+
   return (
     <div className="page" aria-busy={pageLoading}>
       <header className="page-header">
         <div>
           <h1 className="page-title">Incidents</h1>
-          <p className="page-subtitle">Report and track maintenance incidents</p>
+          <p className="page-subtitle">Report an issue, follow its progress, and rate the fix</p>
         </div>
         {canWriteIncidents && <button className="button button--primary" type="button" onClick={() => setShowForm(true)}>+ Report Incident</button>}
       </header>
@@ -165,9 +230,19 @@ export default function IncidentsPage() {
 
       <div className="table-wrap">
         <table className="data-table data-table--responsive">
-          <caption className="sr-only">Maintenance incidents</caption>
+          <caption className="sr-only">Reported issues and their progress</caption>
           <thead>
-            <tr><th scope="col">Reported</th><th scope="col">Title</th><th scope="col">Description</th><th scope="col">Asset</th><th scope="col">Priority</th><th scope="col">Status</th><th scope="col">Reported By</th>{(canWriteIncidents || canDeleteIncidents) && <th scope="col">Actions</th>}</tr>
+            <tr>
+              <th scope="col">Reported</th>
+              <th scope="col">Title</th>
+              <th scope="col">Description</th>
+              <th scope="col">Asset</th>
+              <th scope="col">Priority</th>
+              <th scope="col">Status</th>
+              <th scope="col">Reported By</th>
+              {canReadRatings && <th scope="col">Rating</th>}
+              {showActions && <th scope="col">Actions</th>}
+            </tr>
           </thead>
           <tbody>
             {filtered.map((incident) => (
@@ -184,15 +259,29 @@ export default function IncidentsPage() {
                   </select>
                 </td>
                 <td data-label="Reported by">{incident.reported_by_name || user?.username}</td>
-                {(canWriteIncidents || canDeleteIncidents) && (
+                {canReadRatings && (
+                  <td data-label="Rating">
+                    {Number(incident.rating_count) > 0
+                      ? <span title={`${incident.rating_count} rating(s)`}>{'★'.repeat(Math.round(Number(incident.average_rating) || 0))} <span className="text-muted">({incident.average_rating})</span></span>
+                      : <span className="text-muted">Not rated</span>}
+                  </td>
+                )}
+                {showActions && (
                   <td data-label="Actions">
-                    {canWriteIncidents && <button className="button button--primary button--small" type="button" onClick={() => handleEdit(incident)} aria-label={`Edit incident ${incident.id}`}>Edit</button>}
-                    {canDeleteIncidents && <button className="button button--danger button--small" type="button" onClick={() => handleDelete(incident.id)} disabled={actionLoadingId === incident.id} aria-label={`Delete incident ${incident.id}`}>Delete</button>}
+                    <div className="table-actions">
+                      {canRate && RATEABLE_STATUSES.includes(incident.status) && (
+                        <button className="button button--secondary button--small" type="button" onClick={() => openRating(incident)} aria-label={`Rate service for incident ${incident.id}`}>
+                          {Number(incident.rating_count) > 0 ? 'Edit Rating' : 'Rate'}
+                        </button>
+                      )}
+                      {canWriteIncidents && <button className="button button--primary button--small" type="button" onClick={() => handleEdit(incident)} aria-label={`Edit incident ${incident.id}`}>Edit</button>}
+                      {canDeleteIncidents && <button className="button button--danger button--small" type="button" onClick={() => handleDelete(incident.id)} disabled={actionLoadingId === incident.id} aria-label={`Delete incident ${incident.id}`}>Delete</button>}
+                    </div>
                   </td>
                 )}
               </tr>
             ))}
-            {filtered.length === 0 && <tr><td colSpan={(canWriteIncidents || canDeleteIncidents) ? 8 : 7}><EmptyState>No incidents found</EmptyState></td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={columnCount}><EmptyState>No incidents found</EmptyState></td></tr>}
           </tbody>
         </table>
       </div>
@@ -254,6 +343,73 @@ export default function IncidentsPage() {
             <div className="form-actions">
               <button className="button button--primary" type="submit" disabled={loading}>{loading ? 'Saving...' : (editingId ? 'Update Incident' : 'Report Incident')}</button>
               <button className="button button--secondary" type="button" onClick={closeForm} disabled={loading}>Cancel</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {ratingIncident && (
+        <Modal title={`Rate Service - ${ratingIncident.title}`} onClose={closeRating}>
+          <form className="form-stack" onSubmit={handleRateSubmit} aria-busy={ratingSaving}>
+            {ratingError && <div className="inline-alert" role="alert"><span>{ratingError}</span></div>}
+
+            <div className="form-field">
+              <span className="field-label" id="rating-label">How was the fix for &ldquo;{ratingIncident.title}&rdquo;?</span>
+              <div className="rating-input" role="radiogroup" aria-labelledby="rating-label">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`rating-star${value <= ratingValue ? ' rating-star--active' : ''}`}
+                    role="radio"
+                    aria-checked={value === ratingValue}
+                    aria-label={`${value} star${value > 1 ? 's' : ''}`}
+                    onClick={() => setRatingValue(value)}
+                  >
+                    {'★'}
+                  </button>
+                ))}
+              </div>
+              <p className="field-hint">1 = poor, 5 = excellent</p>
+            </div>
+
+            <div className="form-field">
+              <label className="field-label" htmlFor="rating-feedback">Feedback (optional)</label>
+              <textarea
+                className="input"
+                id="rating-feedback"
+                value={ratingFeedback}
+                onChange={(event) => setRatingFeedback(event.target.value)}
+                placeholder="Tell us what went well or what could be better"
+                rows={3}
+                maxLength={2000}
+              />
+            </div>
+
+            {canReadRatings && ratingsByIncident[ratingIncident.id]?.length > 0 && (
+              <div className="form-field">
+                <span className="field-label">Previous ratings</span>
+                <ul className="rating-list">
+                  {ratingsByIncident[ratingIncident.id].map((rating) => (
+                    <li key={rating.id} className="rating-list__item">
+                      <span className="rating-list__stars" aria-label={`${rating.rating} out of 5`}>
+                        {'★'.repeat(rating.rating)}{'☆'.repeat(5 - rating.rating)}
+                      </span>
+                      <span className="rating-list__meta">
+                        {rating.rated_by_name || 'Unknown'} &middot; {rating.created_at?.split('T')[0] || '-'}
+                      </span>
+                      {rating.feedback && <span className="rating-list__comment">{rating.feedback}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="form-actions">
+              <button className="button button--primary" type="submit" disabled={ratingSaving}>
+                {ratingSaving ? 'Saving...' : 'Submit Rating'}
+              </button>
+              <button className="button button--secondary" type="button" onClick={closeRating} disabled={ratingSaving}>Cancel</button>
             </div>
           </form>
         </Modal>

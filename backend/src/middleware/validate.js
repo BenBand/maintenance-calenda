@@ -15,7 +15,7 @@ const ANALYTICS_PERIODS = ['7d', '30d', '90d', '6m', '12m', 'ytd'];
 const TREND_INTERVALS = ['day', 'week'];
 
 const isOptional = { optional: { values: 'null' } };
-const USER_ROLES = ['admin', 'manager', 'staff'];
+const USER_ROLES = ['admin', 'manager', 'developer'];
 
 function handleValidationErrors(req, res, next) {
   const errors = validationResult(req);
@@ -224,6 +224,24 @@ const idParamValidation = [
   handleValidationErrors,
 ];
 
+const incidentIdParamValidation = [
+  param('incidentId').isInt({ min: 1 }).withMessage('A valid incident ID is required'),
+  handleValidationErrors,
+];
+
+const ratingValidation = [
+  body('rating')
+    .optional({ values: 'null' })
+    .isInt({ min: 1, max: 5 })
+    .withMessage('Rating must be an integer between 1 and 5'),
+  body('feedback')
+    .optional({ values: 'null' })
+    .trim()
+    .isLength({ max: 2000 })
+    .withMessage('Feedback must be 2000 characters or fewer'),
+  handleValidationErrors,
+];
+
 const userCreateValidation = [
   body('username')
     .trim()
@@ -340,6 +358,8 @@ module.exports = {
   serviceRecordValidation,
   incidentValidation,
   idParamValidation,
+  incidentIdParamValidation,
+  ratingValidation,
   assetValidation,
   assetEventValidation,
   downtimeWindowValidation,

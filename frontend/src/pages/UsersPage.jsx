@@ -7,13 +7,13 @@ import Modal from '../components/Modal';
 import PasswordInput from '../components/PasswordInput';
 import { EmptyState, ErrorState, SkeletonPage } from '../components/AsyncState';
 
-const ROLES = ['admin', 'manager', 'staff'];
+const ROLES = ['admin', 'manager', 'developer'];
 
 const EMPTY_FORM = {
   username: '',
   email: '',
   password: '',
-  role: 'staff',
+  role: 'developer',
   confirmPassword: '',
 };
 
@@ -56,7 +56,7 @@ export default function UsersPage() {
       username: target.username || '',
       email: target.email || '',
       password: '',
-      role: target.role || 'staff',
+      role: target.role || 'developer',
       confirmPassword: '',
     });
     setFormError('');

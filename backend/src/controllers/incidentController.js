@@ -1,6 +1,14 @@
 const pool = require('../config/database');
 const { logMaintenanceAudit } = require('../middleware/audit');
 
+const INCIDENT_SELECT = `
+  SELECT i.*, u.username as reported_by_name,
+         (SELECT count(*) FROM incident_ratings ir WHERE ir.incident_id = i.id) AS rating_count,
+         (SELECT round(avg(ir.rating), 1) FROM incident_ratings ir WHERE ir.incident_id = i.id) AS average_rating
+  FROM incidents i
+  LEFT JOIN users u ON i.reported_by = u.id
+`;
+
 async function createIncident(req, res) {
   const { title, description, department, room, asset_type, asset_identifier, priority } = req.body;
   const userId = req.user.id;
@@ -15,7 +23,7 @@ async function createIncident(req, res) {
     );
     const incident = result.rows[0];
     await logMaintenanceAudit(req, 'CREATE_INCIDENT', 'incident', incident.id, { title, priority }, userId);
-    res.status(201).json(incident);
+    res.status(201).json({ ...incident, rating_count: 0, average_rating: null });
   } catch (error) {
     console.error('Create incident error:', error);
     res.status(500).json({ error: 'Failed to create incident' });
@@ -42,7 +50,7 @@ async function getAllIncidents(req, res) {
     const countResult = await pool.query(`SELECT COUNT(*) FROM incidents i ${whereClause}`, params);
     const total = parseInt(countResult.rows[0].count);
     const result = await pool.query(
-      `SELECT i.*, u.username as reported_by_name FROM incidents i LEFT JOIN users u ON i.reported_by = u.id ${whereClause} ORDER BY i.created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+      `${INCIDENT_SELECT} ${whereClause} ORDER BY i.created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`,
       [...params, limit || 25, offset]
     );
     res.json({ data: result.rows, pagination: { total, page: parseInt(page || 1), limit: parseInt(limit || 25) } });
@@ -55,10 +63,7 @@ async function getAllIncidents(req, res) {
 async function getIncidentById(req, res) {
   const { id } = req.params;
   try {
-    const result = await pool.query(
-      'SELECT i.*, u.username as reported_by_name FROM incidents i LEFT JOIN users u ON i.reported_by = u.id WHERE i.id = $1',
-      [id]
-    );
+    const result = await pool.query(`${INCIDENT_SELECT} WHERE i.id = $1`, [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Incident not found' });
     }
@@ -97,7 +102,9 @@ async function updateIncident(req, res) {
     const query = `UPDATE incidents SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`;
     const result = await pool.query(query, values);
     await logMaintenanceAudit(req, 'UPDATE_INCIDENT', 'incident', id, { status, priority }, userId);
-    res.json(result.rows[0]);
+
+    const enriched = await pool.query(`${INCIDENT_SELECT} WHERE i.id = $1`, [id]);
+    res.json(enriched.rows[0]);
   } catch (error) {
     console.error('Update incident error:', error);
     res.status(500).json({ error: 'Failed to update incident' });
@@ -112,6 +119,7 @@ async function deleteIncident(req, res) {
     if (existing.rows.length === 0) {
       return res.status(404).json({ error: 'Incident not found' });
     }
+    await pool.query('DELETE FROM incident_ratings WHERE incident_id = $1', [id]);
     await pool.query('DELETE FROM incidents WHERE id = $1', [id]);
     await logMaintenanceAudit(req, 'DELETE_INCIDENT', 'incident', id, {}, userId);
     res.json({ message: 'Incident deleted successfully' });

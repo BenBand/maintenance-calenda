@@ -13,11 +13,10 @@ const userRoutes = require('./routes/users');
 const maintenanceRoutes = require('./routes/maintenance');
 const serviceRoutes = require('./routes/services');
 const incidentRoutes = require('./routes/incidents');
+const ratingRoutes = require('./routes/ratings');
 const assetRoutes = require('./routes/assets');
 const analyticsRoutes = require('./routes/analytics');
 const downtimeRoutes = require('./routes/downtime');
-
-validateEnv();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -75,7 +74,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/incidents', incidentRoutes);
-app.use('/api/assets', assetRoutes);
+  app.use('/api/ratings', ratingRoutes);
+  app.use('/api/assets', assetRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/downtime', downtimeRoutes);
 
