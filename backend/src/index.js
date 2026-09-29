@@ -25,7 +25,7 @@ const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN;
 
 const allowedOrigins = CLIENT_ORIGIN
   ? CLIENT_ORIGIN.split(',').map((o) => o.trim())
-  : ['http://localhost:3001'];
+  : ['https://maintenance-frontend-wwsg.onrender.com'];
 
 app.use(
   helmet({
@@ -52,17 +52,8 @@ app.use(
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        const error = new Error('Not allowed by CORS');
-        error.status = 403;
-        callback(error);
-      }
-    },
+    origin: allowedOrigins,
     credentials: true,
-    exposedHeaders: ['X-CSRF-Token'],
   })
 );
 app.use(compression());
