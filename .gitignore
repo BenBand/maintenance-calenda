@@ -95,3 +95,6 @@ tmp/
 .agent/
 
 # backend/database/schema.sql
+
+# added a .env file
+README.md/
