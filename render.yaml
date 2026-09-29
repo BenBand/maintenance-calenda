@@ -23,7 +23,7 @@ services:
       - key: JWT_EXPIRES_IN
         value: 8h
       - key: BCRYPT_SALT_ROUNDS
-        value: 10
+        value: 12
       - key: AUDIT_IP_SALT
         generate: true
       - key: DATABASE_URL
