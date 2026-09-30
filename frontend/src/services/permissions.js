@@ -2,6 +2,7 @@ export const ROLES = {
   ADMIN: 'admin',
   MANAGER: 'manager',
   DEVELOPER: 'developer',
+  USER: 'user',
 };
 
 export const PERMISSIONS = {
@@ -41,6 +42,8 @@ const ALL_ROLES = [
   PERMISSIONS.ASSET_READ,
 ];
 
+// Developers own the user accounts (admin, manager, developer, user) and read the
+// statistics and data the system collects.
 export const ROLE_PERMISSIONS = {
   // Admins run the queue: they see incoming requests, respond to them, set
   // maintenance schedules and close them out. User accounts are not part of
@@ -67,13 +70,18 @@ export const ROLE_PERMISSIONS = {
     ...ALL_ROLES,
     ...BASELINE,
   ],
-  // Developers own the user accounts (admin, manager or developer) and read the
+  // Developers own the user accounts (admin, manager, developer, user) and read the
   // statistics and data the system collects.
   [ROLES.DEVELOPER]: [
     PERMISSIONS.USER_READ,
     PERMISSIONS.USER_WRITE,
     PERMISSIONS.USER_DELETE,
     PERMISSIONS.ANALYTICS_READ,
+    ...ALL_ROLES,
+    ...BASELINE,
+  ],
+  // Regular users can report issues, track progress, and rate fixes.
+  [ROLES.USER]: [
     ...ALL_ROLES,
     ...BASELINE,
   ],

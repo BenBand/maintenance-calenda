@@ -4,13 +4,18 @@ const { hashPassword, comparePassword } = require('../utils/bcrypt');
 const jwt = require('jsonwebtoken');
 const { logMaintenanceAudit } = require('../middleware/audit');
 const { generateCSRFToken } = require('../middleware/csrf');
+const { normalizeRole } = require('../middleware/auth');
 
 function publicUser(user) {
   return {
     id: user.id,
     username: user.username,
     email: user.email,
-    role: user.role,
+    // The role is read straight from the `users` table, so it can still hold a
+    // pre-rename value. Emit the current name: the client matches it against
+    // its own permission map, and an unknown role there means every page
+    // redirects and the user is bounced back to the login screen.
+    role: normalizeRole(user.role),
   };
 }
 
@@ -31,7 +36,7 @@ function getRefreshTokenLifetimeMs() {
 
 function createAccessToken(user, csrfToken) {
   return jwt.sign(
-    { id: user.id, username: user.username, role: user.role, csrfToken, type: 'access' },
+    { id: user.id, username: user.username, role: normalizeRole(user.role), csrfToken, type: 'access' },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
   );

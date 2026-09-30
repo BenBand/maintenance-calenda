@@ -83,7 +83,7 @@ async function getUserById(req, res) {
 
 async function createUser(req, res) {
   const { username, email, password, role } = req.body;
-  const assignedRole = role || ROLES.DEVELOPER;
+  const assignedRole = role || ROLES.USER;
 
   try {
     const passwordHash = await hashPassword(password);

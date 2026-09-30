@@ -506,4 +506,146 @@ async function exportComplianceReportPDF(req, res) {
   }
 }
 
-module.exports = { exportServiceRecordPDF, exportCompletionCertificatePDF, exportComplianceReportPDF };
+async function exportIncidentPDF(req, res) {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const incidentResult = await pool.query(
+      `SELECT i.*, u.username as reported_by_name,
+              (SELECT count(*) FROM incident_ratings ir WHERE ir.incident_id = i.id) AS rating_count,
+              (SELECT round(avg(ir.rating), 1) FROM incident_ratings ir WHERE ir.incident_id = i.id) AS average_rating
+       FROM incidents i
+       LEFT JOIN users u ON i.reported_by = u.id
+       WHERE i.id = $1`,
+      [id]
+    );
+
+    if (incidentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Incident not found' });
+    }
+
+    const incident = incidentResult.rows[0];
+
+    const ratingsResult = await pool.query(
+      `SELECT ir.*, u.username as rated_by_name
+       FROM incident_ratings ir
+       LEFT JOIN users u ON ir.rated_by = u.id
+       WHERE ir.incident_id = $1
+       ORDER BY ir.created_at DESC`,
+      [id]
+    );
+
+    const commentsResult = await pool.query(
+      `SELECT ic.*, u.username as commented_by_name
+       FROM incident_comments ic
+       LEFT JOIN users u ON ic.commented_by = u.id
+       WHERE ic.incident_id = $1
+       ORDER BY ic.created_at ASC`,
+      [id]
+    );
+
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="incident-${id}-${Date.now()}.pdf"`);
+    
+    doc.pipe(res);
+
+    addWatermark(doc);
+
+    doc.fontSize(24).font('Helvetica-Bold').fillColor('#1f2937').text('Lusaka City Council', { align: 'center' });
+    doc.moveDown(0.3);
+    doc.fontSize(16).font('Helvetica').fillColor('#6b7280').text('IT Maintenance Calendar', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(20).font('Helvetica-Bold').fillColor('#f97316').text('Incident Report', { align: 'center' });
+    doc.moveDown(1);
+
+    doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#d1d5db').stroke();
+    doc.moveDown(1);
+
+    const details = [
+      { label: 'Incident ID', value: incident.id },
+      { label: 'Title', value: incident.title },
+      { label: 'Description', value: incident.description },
+      { label: 'Department', value: incident.department || '-' },
+      { label: 'Room', value: incident.room || '-' },
+      { label: 'Asset Type', value: incident.asset_type?.replace(/_/g, ' ') || '-' },
+      { label: 'Asset Identifier', value: incident.asset_identifier || '-' },
+      { label: 'Priority', value: incident.priority },
+      { label: 'Status', value: incident.status },
+      { label: 'Reported By', value: incident.reported_by_name || '-' },
+      { label: 'Created At', value: formatDateTime(incident.created_at) },
+      { label: 'Updated At', value: formatDateTime(incident.updated_at) },
+    ];
+
+    doc.font('Helvetica').fontSize(11);
+    details.forEach((item, index) => {
+      const y = doc.y;
+      doc.fillColor('#6b7280').font('Helvetica').text(`${item.label}:`, 50, y, { width: 180, continued: false });
+      doc.fillColor('#1f2937').font('Helvetica').text(item.value, 230, y, { width: doc.page.width - 280 });
+      doc.moveDown(0.5);
+    });
+
+    // Ratings section
+    if (ratingsResult.rows.length > 0) {
+      doc.moveDown(1);
+      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#d1d5db').stroke();
+      doc.moveDown(0.5);
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#1f2937').text('Ratings', { align: 'left' });
+      doc.moveDown(0.5);
+
+      doc.font('Helvetica').fontSize(11);
+      ratingsResult.rows.forEach((rating) => {
+        const stars = '★'.repeat(rating.rating) + '☆'.repeat(5 - rating.rating);
+        doc.fillColor('#1f2937').text(`${stars}  (${rating.rating}/5)`);
+        if (rating.feedback) {
+          doc.fillColor('#6b7280').fontSize(10).text(`"${rating.feedback}"`, { indent: 20 });
+        }
+        doc.fillColor('#9ca3af').fontSize(9).text(`By: ${rating.rated_by_name || 'Unknown'} | ${formatDateTime(rating.created_at)}`, { indent: 20 });
+        doc.moveDown(0.5);
+      });
+
+      doc.moveDown(0.5);
+      doc.fontSize(11).fillColor('#1f2937').text(`Average Rating: ${incident.average_rating || 'N/A'} (${incident.rating_count} rating(s))`);
+    }
+
+    // Comments section
+    if (commentsResult.rows.length > 0) {
+      doc.moveDown(1);
+      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#d1d5db').stroke();
+      doc.moveDown(0.5);
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#1f2937').text('Comments', { align: 'left' });
+      doc.moveDown(0.5);
+
+      doc.font('Helvetica').fontSize(11);
+      commentsResult.rows.forEach((comment) => {
+        doc.fillColor('#1f2937').text(comment.comment);
+        doc.fillColor('#9ca3af').fontSize(9).text(`By: ${comment.commented_by_name || 'Unknown'} | ${formatDateTime(comment.created_at)}`, { indent: 20 });
+        doc.moveDown(0.5);
+      });
+    }
+
+    doc.moveDown(2);
+    doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#d1d5db').stroke();
+    doc.moveDown(0.5);
+    doc.fontSize(9).fillColor('#9ca3af').text(
+      `Generated on ${new Date().toLocaleString('en-GB')} by ${req.user.username} | Lusaka City Council IT Maintenance Calendar`,
+      { align: 'center' }
+    );
+    doc.moveDown(0.3);
+    doc.fontSize(8).fillColor('#9ca3af').text(
+      'This document is for official government records retention purposes.',
+      { align: 'center' }
+    );
+
+    doc.end();
+
+    await logMaintenanceAudit(req, 'EXPORT_INCIDENT_PDF', 'incident', id, { format: 'pdf' }, userId);
+  } catch (error) {
+    console.error('Export incident PDF error:', error);
+    res.status(500).json({ error: 'Failed to generate incident PDF' });
+  }
+}
+
+module.exports = { exportServiceRecordPDF, exportCompletionCertificatePDF, exportComplianceReportPDF, exportIncidentPDF };

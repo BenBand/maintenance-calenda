@@ -25,6 +25,7 @@ export function AuthProvider({ children }) {
     }
   });
   const [ready, setReady] = useState(false);
+  const [sessionError, setSessionError] = useState('');
   const authAdapterRef = useRef(null);
   authAdapterRef.current = {
     getCredentials: () => ({ token, csrfToken, refreshToken }),
@@ -73,13 +74,27 @@ export function AuthProvider({ children }) {
       try {
         const response = await apiFetch('/auth/me');
         const data = await readResponseJson(response);
-        if (!cancelled) {
-          setUser(data);
-          if (data?.csrfToken) setSession({ csrfToken: data.csrfToken });
-          setReady(true);
+        if (cancelled) return;
+        setUser(data);
+        setSessionError('');
+        if (data?.csrfToken) setSession({ csrfToken: data.csrfToken });
+        setReady(true);
+      } catch (error) {
+        if (cancelled) return;
+        // Only a rejected or expired token means the session is genuinely gone.
+        // Signing out on any other failure (403, 500, offline) throws the user
+        // back to the login screen with no explanation, which looks like the
+        // credentials were rejected when they were not.
+        if (error?.status === 401) {
+          logout();
+          return;
         }
-      } catch {
-        if (!cancelled) logout();
+        setSessionError(
+          error?.status
+            ? `Unable to verify your session (HTTP ${error.status}). Please try again.`
+            : 'Unable to reach the server. Check your connection and try again.'
+        );
+        setReady(true);
       }
     };
 
@@ -113,7 +128,7 @@ export function AuthProvider({ children }) {
   );
 
   return (
-    <AuthContext.Provider value={{ token, csrfToken, refreshToken, user, login, logout, ready, can }}>
+    <AuthContext.Provider value={{ token, csrfToken, refreshToken, user, login, logout, ready, can, sessionError }}>
       {children}
     </AuthContext.Provider>
   );

@@ -15,7 +15,7 @@ const ANALYTICS_PERIODS = ['7d', '30d', '90d', '6m', '12m', 'ytd'];
 const TREND_INTERVALS = ['day', 'week'];
 
 const isOptional = { optional: { values: 'null' } };
-const USER_ROLES = ['admin', 'manager', 'developer'];
+const USER_ROLES = ['admin', 'manager', 'developer', 'user'];
 
 function handleValidationErrors(req, res, next) {
   const errors = validationResult(req);
@@ -242,6 +242,14 @@ const ratingValidation = [
   handleValidationErrors,
 ];
 
+const commentValidation = [
+  body('comment')
+    .trim()
+    .isLength({ min: 1, max: 2000 })
+    .withMessage('Comment is required and must be under 2000 characters'),
+  handleValidationErrors,
+];
+
 const userCreateValidation = [
   body('username')
     .trim()
@@ -360,6 +368,7 @@ module.exports = {
   idParamValidation,
   incidentIdParamValidation,
   ratingValidation,
+  commentValidation,
   assetValidation,
   assetEventValidation,
   downtimeWindowValidation,

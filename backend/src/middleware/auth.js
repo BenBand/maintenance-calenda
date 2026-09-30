@@ -5,6 +5,7 @@ const ROLES = {
   ADMIN: 'admin',
   MANAGER: 'manager',
   DEVELOPER: 'developer',
+  USER: 'user',
 };
 
 const PERMISSIONS = {
@@ -66,7 +67,7 @@ const MANAGER_PERMISSIONS = [
   ...BASELINE,
 ];
 
-// Developers own the user accounts (admin, manager or developer) and read the
+// Developers own the user accounts (admin, manager, developer, user) and read the
 // statistics and data the system collects. They cannot create or cancel
 // schedules, and the asset register stays read-only because it is a
 // council-wide inventory.
@@ -77,11 +78,31 @@ const DEVELOPER_PERMISSIONS = [
   ...BASELINE,
 ];
 
+// Regular users can report issues, track progress, and rate fixes.
+const USER_PERMISSIONS = [
+  ...ALL_ROLES,
+  ...BASELINE,
+];
+
 const ROLE_PERMISSIONS = {
   [ROLES.ADMIN]: ADMIN_PERMISSIONS,
   [ROLES.MANAGER]: MANAGER_PERMISSIONS,
   [ROLES.DEVELOPER]: DEVELOPER_PERMISSIONS,
+  [ROLES.USER]: USER_PERMISSIONS,
 };
+
+// Roles that were renamed in place. A token minted before the rename still
+// carries the old value, and the database still holds it until the migration
+// runs. Resolving the alias keeps those sessions working instead of silently
+// matching an empty permission set and 403-ing every route.
+const LEGACY_ROLE_ALIASES = {
+  staff: ROLES.DEVELOPER,
+};
+
+function normalizeRole(role) {
+  if (!role) return null;
+  return LEGACY_ROLE_ALIASES[role] || role;
+}
 
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -99,17 +120,21 @@ function authenticateToken(req, res, next) {
     if (user.type !== 'access') {
       return res.status(403).json({ error: 'Invalid token type' });
     }
-    req.user = user;
+    // Resolve renamed roles once, here, so `req.user.role` is always a role the
+    // permission map knows. This is what makes /auth/me hand the client a
+    // current role to match its own permission checks against.
+    req.user = { ...user, role: normalizeRole(user.role) };
     next();
   });
 }
 
 function authorizeRoles(...allowedRoles) {
+  const allowed = allowedRoles.map(normalizeRole);
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: 'Authentication required' });
     }
-    if (!allowedRoles.includes(req.user.role)) {
+    if (!allowed.includes(normalizeRole(req.user.role))) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
     next();
@@ -117,7 +142,7 @@ function authorizeRoles(...allowedRoles) {
 }
 
 function hasPermission(userRole, permission) {
-  const permissions = ROLE_PERMISSIONS[userRole] || [];
+  const permissions = ROLE_PERMISSIONS[normalizeRole(userRole)] || [];
   return permissions.includes(permission);
 }
 
@@ -139,6 +164,7 @@ module.exports = {
   hasPermission,
   requirePermission,
   can: hasPermission,
+  normalizeRole,
   ROLES,
   PERMISSIONS,
   ROLE_PERMISSIONS,
