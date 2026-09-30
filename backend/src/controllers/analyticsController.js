@@ -25,7 +25,7 @@ async function getOverview(req, res) {
   const params = windowParams(from, to);
 
   try {
-    const [scheduleTotals, assetTotals, costTotals, incidentTotals] = await Promise.all([
+    const [scheduleTotals, assetTotals, incidentTotals] = await Promise.all([
       pool.query(
         `SELECT
             count(*)                                                          AS total,
@@ -40,9 +40,9 @@ async function getOverview(req, res) {
             COALESCE(sum(s.duration_minutes) FILTER (WHERE s.scheduled_at >= now()), 0) AS booked_minutes,
             round(AVG(EXTRACT(EPOCH FROM (sr.created_at - s.scheduled_at)) / 60.0)
                   FILTER (WHERE s.status = 'completed' AND sr.id IS NOT NULL), 1) AS avg_resolution_hours
-         FROM maintenance_schedules s
-         LEFT JOIN service_records sr ON sr.schedule_id = s.id
-         WHERE s.scheduled_at >= $1::timestamptz AND s.scheduled_at < $2::timestamptz`,
+           FROM maintenance_schedules s
+           LEFT JOIN service_records sr ON sr.schedule_id = s.id
+           WHERE s.scheduled_at >= $1::timestamptz AND s.scheduled_at < $2::timestamptz`,
         params
       ),
       pool.query(
@@ -60,21 +60,8 @@ async function getOverview(req, res) {
             (SELECT count(*) FROM assets
               WHERE end_of_life_date IS NOT NULL
                 AND end_of_life_date BETWEEN $1::date AND ($2::date + 90)
-            )                                                                AS end_of_life_soon,
-            (SELECT COALESCE(sum(purchase_cost), 0) FROM assets WHERE purchase_date >= $1::date) AS procurement_spend`
+            )                                                                AS end_of_life_soon`
       , params),
-      pool.query(
-        `SELECT
-            COALESCE(sum(sr.labor_cost), 0)                                AS labor_cost,
-            COALESCE(sum(sr.parts_cost), 0)                                AS parts_cost,
-            COALESCE(sum(sr.total_cost), 0)                                AS maintenance_cost,
-            COALESCE(sum(s.estimated_cost) FILTER (WHERE s.status = 'completed'), 0) AS budgeted,
-            COALESCE(sum(sr.downtime_minutes), 0)                          AS service_downtime_minutes
-         FROM service_records sr
-         JOIN maintenance_schedules s ON s.id = sr.schedule_id
-         WHERE s.scheduled_at >= $1::timestamptz AND s.scheduled_at < $2::timestamptz`,
-        params
-      ),
       pool.query(
         `SELECT
             count(*)                                                        AS total,
@@ -90,11 +77,9 @@ async function getOverview(req, res) {
 
     const schedules = scheduleTotals.rows[0];
     const assets = assetTotals.rows[0];
-    const costs = costTotals.rows[0];
     const incidents = incidentTotals.rows[0];
 
     const actionable = Number(schedules.total) - Number(schedules.cancelled);
-    const maintenanceCost = Number(costs.maintenance_cost);
 
     res.json({
       range: { from: from.toISOString(), to: to.toISOString(), preset, timezone },
@@ -121,17 +106,6 @@ async function getOverview(req, res) {
         disposed: Number(assets.disposed),
         warranty_expiring: Number(assets.warranty_expiring),
         end_of_life_soon: Number(assets.end_of_life_soon),
-      },
-      costs: {
-        labor: Number(costs.labor_cost),
-        parts: Number(costs.parts_cost),
-        maintenance: maintenanceCost,
-        procurement: Number(assets.procurement_spend),
-        budgeted: Number(costs.budgeted),
-        variance: Number(costs.budgeted) - maintenanceCost,
-        budget_utilisation: Number(costs.budgeted) > 0
-          ? Number(((maintenanceCost / Number(costs.budgeted)) * 100).toFixed(1))
-          : null,
       },
       incidents: {
         total: Number(incidents.total),
@@ -178,8 +152,7 @@ async function getMaintenanceFrequency(req, res) {
                 count(sr.id)                                               AS services_logged,
                 avg(d.gap_days) FILTER (WHERE d.gap_days > 0)              AS avg_gap_days,
                 sum(COALESCE(d.duration_minutes, 0))                       AS booked_minutes,
-                sum(COALESCE(sr.downtime_minutes, 0))                      AS downtime_minutes,
-                sum(COALESCE(sr.total_cost, 0))                            AS service_cost
+                sum(COALESCE(sr.time_spent_minutes, 0))                    AS time_spent_minutes
          FROM dated d
          LEFT JOIN service_records sr ON sr.schedule_id = d.id
          GROUP BY d.asset_type
@@ -196,10 +169,9 @@ async function getMaintenanceFrequency(req, res) {
                     / NULLIF(COALESCE(tr.assets_tracked, 0), 0), 2)                AS services_per_asset,
               round(COALESCE(a.avg_gap_days, 0), 1)                                AS avg_days_between_services,
               COALESCE(a.booked_minutes, 0)                                        AS booked_minutes,
-              COALESCE(a.downtime_minutes, 0)                                      AS downtime_minutes,
-              COALESCE(a.service_cost, 0)                                           AS service_cost,
-              round(COALESCE(a.service_cost, 0)::numeric
-                    / NULLIF(COALESCE(a.booked_minutes, 0), 0) * 60, 2)            AS cost_per_booked_hour
+              COALESCE(a.time_spent_minutes, 0)                                    AS time_spent_minutes,
+              round(COALESCE(a.time_spent_minutes, 0)::numeric
+                    / NULLIF(COALESCE(a.booked_minutes, 0), 0) * 100, 1)           AS time_utilisation_pct
        FROM asset_types t
        LEFT JOIN tracked tr ON tr.asset_type = t.code
        LEFT JOIN agg a ON a.asset_type = t.code
@@ -216,8 +188,7 @@ async function getMaintenanceFrequency(req, res) {
       assets_serviced: Number(row.assets_serviced),
       services_logged: Number(row.services_logged),
       booked_minutes: Number(row.booked_minutes),
-      downtime_minutes: Number(row.downtime_minutes),
-      service_cost: Number(row.service_cost),
+      time_spent_minutes: Number(row.time_spent_minutes),
       completion_rate: Number(row.schedules) > 0
         ? Number(((Number(row.completed) / Number(row.schedules)) * 100).toFixed(1))
         : 0,
@@ -252,7 +223,6 @@ async function getTechnicianWorkload(req, res) {
               count(*) FILTER (WHERE s.scheduled_at >= now())               AS upcoming,
               COALESCE(sum(s.duration_minutes), 0)                          AS booked_minutes,
               COALESCE(sum(s.duration_minutes) FILTER (WHERE s.status = 'completed'), 0) AS completed_minutes,
-              COALESCE(sum(sr.total_cost), 0)                               AS service_cost,
               round(AVG(EXTRACT(EPOCH FROM (sr.created_at - s.scheduled_at)) / 60.0)
                     FILTER (WHERE s.status = 'completed' AND sr.id IS NOT NULL), 1) AS avg_resolution_hours,
               max(s.scheduled_at)                                           AS last_scheduled_at
@@ -277,7 +247,6 @@ async function getTechnicianWorkload(req, res) {
         upcoming: Number(row.upcoming),
         booked_minutes: Number(row.booked_minutes),
         completed_minutes: Number(row.completed_minutes),
-        service_cost: Number(row.service_cost),
         avg_resolution_hours: row.avg_resolution_hours === null
           ? null
           : round1(Number(row.avg_resolution_hours) / 60),
@@ -433,7 +402,7 @@ function fillBuckets(rows, from, to, interval, timezone) {
   return filled.filter((row, index, all) => index === all.length - 1 || row.due > 0 || all[index + 1].due > 0);
 }
 
-async function getCostByDepartment(req, res) {
+async function getTimeByDepartment(req, res) {
   const { from, to, preset, timezone } = resolveRange(req.query);
   const params = windowParams(from, to);
 
@@ -451,8 +420,7 @@ async function getCostByDepartment(req, res) {
        dept_assets AS (
          SELECT department,
                 count(*)                             AS assets,
-                count(*) FILTER (WHERE lifecycle_status IN ('deployed','in_service')) AS in_service,
-                COALESCE(sum(purchase_cost), 0)      AS procurement_spend
+                count(*) FILTER (WHERE lifecycle_status IN ('deployed','in_service')) AS in_service
          FROM assets
          WHERE department IS NOT NULL
          GROUP BY department
@@ -461,23 +429,13 @@ async function getCostByDepartment(req, res) {
          SELECT s.department,
                 count(DISTINCT s.asset_id)                  AS assets_serviced,
                 count(*)                                    AS services,
-                COALESCE(sum(sr.labor_cost), 0)             AS labor_cost,
-                COALESCE(sum(sr.parts_cost), 0)             AS parts_cost,
-                COALESCE(sum(sr.total_cost), 0)             AS maintenance_cost,
-                COALESCE(sum(s.estimated_cost), 0)          AS budgeted,
-                COALESCE(sum(sr.downtime_minutes), 0)       AS downtime_minutes,
-                COALESCE(sum(s.duration_minutes), 0)        AS booked_minutes
+                COALESCE(sum(sr.time_spent_minutes), 0)     AS time_spent_minutes,
+                COALESCE(sum(s.duration_minutes), 0)        AS booked_minutes,
+                count(*) FILTER (WHERE sr.complexity_level = 'complex') AS complex_services
          FROM service_records sr
          JOIN maintenance_schedules s ON s.id = sr.schedule_id
          WHERE s.scheduled_at >= $1::timestamptz AND s.scheduled_at < $2::timestamptz
          GROUP BY s.department
-       ),
-       dept_budget AS (
-         SELECT department, COALESCE(sum(estimated_cost), 0) AS budgeted
-         FROM maintenance_schedules
-         WHERE estimated_cost IS NOT NULL
-           AND scheduled_at >= $1::timestamptz AND scheduled_at < $2::timestamptz
-         GROUP BY department
        )
        SELECT d.department,
               COALESCE(da.assets, 0)                AS assets,
@@ -485,22 +443,16 @@ async function getCostByDepartment(req, res) {
               COALESCE(dm.assets_serviced, 0)       AS assets_serviced,
               COALESCE(dm.services, 0)              AS services,
               COALESCE(dm.booked_minutes, 0)        AS booked_minutes,
-              COALESCE(da.procurement_spend, 0)     AS procurement_spend,
-              COALESCE(dm.labor_cost, 0)            AS labor_cost,
-              COALESCE(dm.parts_cost, 0)            AS parts_cost,
-              COALESCE(dm.maintenance_cost, 0)      AS maintenance_cost,
-              COALESCE(db.budgeted, 0)              AS budgeted,
-              COALESCE(db.budgeted, 0) - COALESCE(dm.maintenance_cost, 0) AS variance,
-              COALESCE(dm.downtime_minutes, 0)      AS downtime_minutes,
-              round(COALESCE(dm.maintenance_cost, 0)::numeric
-                    / NULLIF(COALESCE(dm.services, 0), 0), 2)                AS cost_per_service,
-              round(COALESCE(dm.maintenance_cost, 0)::numeric
-                    / NULLIF(COALESCE(da.assets, 0), 0), 2)                  AS cost_per_asset
+              COALESCE(dm.time_spent_minutes, 0)    AS time_spent_minutes,
+              COALESCE(dm.complex_services, 0)      AS complex_services,
+              round(COALESCE(dm.time_spent_minutes, 0)::numeric
+                    / NULLIF(COALESCE(dm.services, 0), 0), 1)                AS avg_time_per_service,
+              round(COALESCE(dm.time_spent_minutes, 0)::numeric
+                    / NULLIF(COALESCE(da.assets, 0), 0), 1)                  AS time_per_asset
        FROM departments d
        LEFT JOIN dept_assets da ON da.department = d.department
        LEFT JOIN dept_maintenance dm ON dm.department = d.department
-       LEFT JOIN dept_budget db ON db.department = d.department
-       ORDER BY maintenance_cost DESC, d.department ASC`,
+       ORDER BY time_spent_minutes DESC, d.department ASC`,
       params
     );
 
@@ -511,39 +463,31 @@ async function getCostByDepartment(req, res) {
       assets_serviced: Number(row.assets_serviced),
       services: Number(row.services),
       booked_minutes: Number(row.booked_minutes),
-      procurement_spend: Number(row.procurement_spend),
-      labor_cost: Number(row.labor_cost),
-      parts_cost: Number(row.parts_cost),
-      maintenance_cost: Number(row.maintenance_cost),
-      budgeted: Number(row.budgeted),
-      variance: Number(row.variance),
-      downtime_minutes: Number(row.downtime_minutes),
-      total_cost: Number(row.procurement_spend) + Number(row.maintenance_cost),
-      budget_utilisation: Number(row.budgeted) > 0
-        ? round1((Number(row.maintenance_cost) / Number(row.budgeted)) * 100)
-        : null,
+      time_spent_minutes: Number(row.time_spent_minutes),
+      complex_services: Number(row.complex_services),
+      avg_time_per_service: Number(row.avg_time_per_service),
+      time_per_asset: Number(row.time_per_asset),
     }));
 
-    const totalMaintenance = rows.reduce((sum, row) => sum + row.maintenance_cost, 0);
-    const totalProcurement = rows.reduce((sum, row) => sum + row.procurement_spend, 0);
+    const totalTimeSpent = rows.reduce((sum, row) => sum + row.time_spent_minutes, 0);
 
     res.json({
       range: { from: from.toISOString(), to: to.toISOString(), preset, timezone },
       by_department: rows.map((row) => ({
         ...row,
-        share_of_maintenance: totalMaintenance > 0
-          ? round1((row.maintenance_cost / totalMaintenance) * 100)
+        share_of_time: totalTimeSpent > 0
+          ? round1((row.time_spent_minutes / totalTimeSpent) * 100)
           : 0,
       })),
       totals: {
-        maintenance_cost: round1(totalMaintenance),
-        procurement_spend: round1(totalProcurement),
-        total_cost: round1(totalMaintenance + totalProcurement),
+        time_spent_hours: round1(totalTimeSpent / 60),
+        total_services: rows.reduce((sum, row) => sum + row.services, 0),
+        total_complex_services: rows.reduce((sum, row) => sum + row.complex_services, 0),
       },
     });
   } catch (error) {
-    console.error('Cost by department error:', error);
-    res.status(500).json({ error: 'Failed to build cost breakdown report' });
+    console.error('Time by department error:', error);
+    res.status(500).json({ error: 'Failed to build time breakdown report' });
   }
 }
 
@@ -584,9 +528,12 @@ async function getUptimeStats(req, res) {
              AND w.starts_at < $2::timestamptz AND w.ends_at > $1::timestamptz
          ),
          serviced AS (
+           -- service_records.downtime_minutes was dropped in migration 000014.
+           -- Service counts still come from service_records, but every minute of
+           -- downtime is now derived from downtime_windows, which records both
+           -- the department and the asset it knocked out.
            SELECT s.department,
-                  sum(COALESCE(sr.downtime_minutes, 0)) AS downtime_minutes,
-                  count(*) FILTER (WHERE sr.downtime_minutes IS NOT NULL) AS recorded
+                  count(*) AS services_recorded
            FROM service_records sr
            JOIN maintenance_schedules s ON s.id = sr.schedule_id
            WHERE s.scheduled_at >= $1::timestamptz AND s.scheduled_at < $2::timestamptz
@@ -597,8 +544,7 @@ async function getUptimeStats(req, res) {
                 COALESCE(cw.overlap_seconds, 0)::numeric / 60     AS council_downtime_minutes,
                 COALESCE(sc.windows, 0)                           AS windows,
                 COALESCE(cw.windows, 0)                           AS council_windows,
-                COALESCE(sv.downtime_minutes, 0)                  AS service_downtime_minutes,
-                COALESCE(sv.recorded, 0)                          AS services_recorded
+                COALESCE(sv.services_recorded, 0)                 AS services_recorded
          FROM departments d
          LEFT JOIN scoped sc ON sc.department = d.department
          LEFT JOIN serviced sv ON sv.department = d.department
@@ -619,10 +565,19 @@ async function getUptimeStats(req, res) {
         [from.toISOString(), to.toISOString()]
       ),
       pool.query(
-        `WITH serviced AS (
+        `WITH asset_windows AS (
+           SELECT w.asset_id,
+                  sum(EXTRACT(EPOCH FROM (
+                    LEAST(w.ends_at, $2::timestamptz) - GREATEST(w.starts_at, $1::timestamptz)
+                  )))::bigint / 60 AS service_downtime_minutes
+           FROM downtime_windows w
+           WHERE w.asset_id IS NOT NULL
+             AND w.starts_at < $2::timestamptz AND w.ends_at > $1::timestamptz
+           GROUP BY w.asset_id
+         ),
+         serviced AS (
            SELECT a.id, a.asset_identifier, a.asset_type, a.department,
-                  sum(COALESCE(sr.downtime_minutes, 0)) AS service_downtime_minutes,
-                  count(*) FILTER (WHERE sr.id IS NOT NULL) AS services
+                  count(sr.id) AS services
            FROM assets a
            LEFT JOIN service_records sr
              ON sr.asset_id = a.id
@@ -630,10 +585,12 @@ async function getUptimeStats(req, res) {
            GROUP BY a.id, a.asset_identifier, a.asset_type, a.department
          )
          SELECT s.id, s.asset_identifier, s.asset_type, s.department,
-                s.services, s.service_downtime_minutes,
+                s.services,
+                COALESCE(aw.service_downtime_minutes, 0) AS service_downtime_minutes,
                 (EXTRACT(EPOCH FROM ($2::timestamptz - $1::timestamptz)) / 60) AS period_minutes
          FROM serviced s
-         ORDER BY s.service_downtime_minutes DESC, s.asset_identifier
+         LEFT JOIN asset_windows aw ON aw.asset_id = s.id
+         ORDER BY service_downtime_minutes DESC, s.asset_identifier
          LIMIT 50`,
         [from.toISOString(), to.toISOString()]
       ),
@@ -642,7 +599,6 @@ async function getUptimeStats(req, res) {
             count(*) FILTER (WHERE lifecycle_status IN ('deployed','in_service')) AS operational_assets,
             count(*) FILTER (WHERE lifecycle_status = 'maintenance')                AS in_maintenance,
             count(*) FILTER (WHERE lifecycle_status IN ('procurement','retired','disposed')) AS out_of_service,
-            COALESCE(sum(COALESCE(sr.downtime_minutes, 0)), 0)                     AS service_downtime_minutes,
             COALESCE(count(DISTINCT sr.schedule_id), 0)                            AS services_logged
          FROM assets a
          LEFT JOIN service_records sr
@@ -654,31 +610,31 @@ async function getUptimeStats(req, res) {
     const rows = deptResult.rows.map((row) => {
       const windowMinutes = Number(row.window_downtime_minutes);
       const councilMinutes = Number(row.council_downtime_minutes);
-      const serviceMinutes = Number(row.service_downtime_minutes);
-      const downtimeMinutes = windowMinutes + councilMinutes + serviceMinutes;
+      const servicesRecorded = Number(row.services_recorded);
+      // Every window a department owns is downtime for it, plus the council-wide
+      // windows that are not attributable to a single department.
+      const downtimeMinutes = windowMinutes + councilMinutes;
       return {
         department: row.department,
         windows: Number(row.windows) + Number(row.council_windows),
         own_window_minutes: windowMinutes,
         council_window_minutes: councilMinutes,
-        service_downtime_minutes: serviceMinutes,
+        services_recorded: servicesRecorded,
         downtime_minutes: downtimeMinutes,
-        services_recorded: Number(row.services_recorded),
         period_minutes: periodMinutes,
         uptime_pct: periodMinutes > 0
           ? Number((Math.max(0, 100 - (downtimeMinutes / periodMinutes) * 100)).toFixed(2))
           : 100,
-        mttr_hours: Number(row.services_recorded) > 0
-          ? Number((downtimeMinutes / Number(row.services_recorded) / 60).toFixed(1))
+        mttr_hours: servicesRecorded > 0
+          ? Number((downtimeMinutes / servicesRecorded / 60).toFixed(1))
           : 0,
       };
     });
 
     const summary = summaryResult.rows[0];
     const operationalAssets = Number(summary.operational_assets) || 0;
-    const totalServiceDowntime = Number(summary.service_downtime_minutes);
     const windowDowntimeMinutes = windowResult.rows.reduce((sum, row) => sum + Number(row.minutes_in_window), 0);
-    const totalDowntimeMinutes = totalServiceDowntime + windowDowntimeMinutes;
+    const totalDowntimeMinutes = windowDowntimeMinutes;
 
     res.json({
       range: { from: from.toISOString(), to: to.toISOString(), preset, timezone },
@@ -713,7 +669,7 @@ async function getUptimeStats(req, res) {
         minutes_in_window: Number(row.minutes_in_window),
       })),
       methodology: {
-        downtime_sources: ['downtime_windows', 'service_records.downtime_minutes'],
+        downtime_sources: ['downtime_windows'],
         note: 'Planned and service downtime are additive; windows without a department are attributed to every department. Figures exclude cancelled schedules.',
       },
     });
@@ -728,6 +684,6 @@ module.exports = {
   getMaintenanceFrequency,
   getTechnicianWorkload,
   getOverdueTrend,
-  getCostByDepartment,
+  getTimeByDepartment,
   getUptimeStats,
 };

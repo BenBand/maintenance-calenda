@@ -7,7 +7,7 @@ import Modal from '../components/Modal';
 import AssetForm from '../components/AssetForm';
 import LifecycleTimeline, { LifecycleProgress } from '../components/LifecycleTimeline';
 import { EmptyState, ErrorState, SkeletonPage } from '../components/AsyncState';
-import { formatCurrency, formatMinutes, humanizeKey } from '../utils/datetime';
+import { formatMinutes, humanizeKey } from '../utils/datetime';
 import './assets.css';
 
 const STATUS_TABS = [
@@ -109,9 +109,8 @@ function AssetDetail({ assetId, assetTypes, canWrite, onChanged, onClose }) {
         <div><dt>Assigned to</dt><dd>{asset.assigned_to || '—'}</dd></div>
         <div><dt>Services</dt><dd>{asset.service_records?.length ?? 0}</dd></div>
         <div><dt>Incidents</dt><dd>{asset.incidents?.length ?? 0}</dd></div>
-        <div><dt>Lifetime cost</dt><dd>{asset.lifetime_service_cost > 0 ? formatCurrency(asset.lifetime_service_cost) : '—'}</dd></div>
-        {asset.lifetime_downtime_minutes > 0 && (
-          <div><dt>Lifetime downtime</dt><dd>{formatMinutes(asset.lifetime_downtime_minutes)}</dd></div>
+        {asset.lifetime_service_minutes > 0 && (
+          <div><dt>Lifetime service time</dt><dd>{formatMinutes(asset.lifetime_service_minutes)}</dd></div>
         )}
       </dl>
 
@@ -199,7 +198,7 @@ function AssetDetail({ assetId, assetTypes, canWrite, onChanged, onClose }) {
               <li key={record.id} className="mini-list__item">
                 <span>{String(record.signer_date || record.created_at || '').slice(0, 10)}</span>
                 <span>{record.work_performed?.slice(0, 60) || '—'}</span>
-                <span>{record.total_cost > 0 ? formatCurrency(record.total_cost) : '—'}</span>
+                <span>{record.time_spent_minutes > 0 ? formatMinutes(record.time_spent_minutes) : '—'}</span>
               </li>
             ))}
           </ul>
@@ -326,7 +325,7 @@ export default function AssetsPage() {
           <div className="stat-card stat-card--compact">
             <div className="stat-card__number">{stats.total}</div>
             <div className="stat-card__label">Total Assets</div>
-            <div className="stat-card__hint">{formatCurrency(stats.procurement_spend)} procured</div>
+            <div className="stat-card__hint">{stats.procurement} in procurement</div>
           </div>
           <div className="stat-card stat-card--compact stat-card--success">
             <div className="stat-card__number">{stats.in_service + stats.deployed}</div>

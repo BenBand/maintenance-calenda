@@ -109,19 +109,6 @@ export function formatHours(minutes) {
   return formatMinutes(Number(minutes || 0) / 60);
 }
 
-export function formatCurrency(value) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return '-';
-  return `ZMW ${amount.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-export function formatCompactCurrency(value) {
-  const amount = Number(value) || 0;
-  if (amount >= 1_000_000) return `ZMW ${(amount / 1_000_000).toFixed(1)}M`;
-  if (amount >= 1_000) return `ZMW ${(amount / 1_000).toFixed(0)}k`;
-  return `ZMW ${amount.toFixed(0)}`;
-}
-
 export function formatPercent(value, digits = 1) {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return '-';

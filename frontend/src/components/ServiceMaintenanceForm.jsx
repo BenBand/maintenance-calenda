@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import SignatureCanvas from './SignatureCanvas';
 import { formatTimeRange, humanizeKey } from '../utils/datetime';
 
+const COMPLEXITY_LEVELS = ['simple', 'medium', 'complex'];
+
 export default function ServiceMaintenanceForm({ schedule, onSubmit, onCancel, loading = false }) {
   const [form, setForm] = useState({
     schedule_id: schedule?.id || '',
@@ -11,11 +13,11 @@ export default function ServiceMaintenanceForm({ schedule, onSubmit, onCancel, l
     signer_name: '',
     signer_date: '',
     signature_data: null,
-    // Actual spend and the resulting downtime drive cost-per-department and
-    // uptime reporting, so capture them at the point the work is closed out.
-    labor_cost: '',
-    parts_cost: '',
-    downtime_minutes: schedule?.duration_minutes ? String(schedule.duration_minutes) : '',
+    // Internal tracking fields; maintenance here is internal council work
+    time_spent_minutes: schedule?.duration_minutes ? String(schedule.duration_minutes) : '',
+    complexity_level: 'medium',
+    parts_replaced: '',
+    next_maintenance_due: '',
   });
   const [errors, setErrors] = useState({});
 
@@ -30,9 +32,10 @@ export default function ServiceMaintenanceForm({ schedule, onSubmit, onCancel, l
     if (!signatureData) nextErrors.signature_data = 'Signature is required';
     if (form.outcome && form.outcome.length > 2000) nextErrors.outcome = 'Must be 2000 characters or fewer';
     if (form.follow_up && form.follow_up.length > 2000) nextErrors.follow_up = 'Must be 2000 characters or fewer';
-    if (form.labor_cost !== '' && Number(form.labor_cost) < 0) nextErrors.labor_cost = 'Cost cannot be negative';
-    if (form.parts_cost !== '' && Number(form.parts_cost) < 0) nextErrors.parts_cost = 'Cost cannot be negative';
-    if (form.downtime_minutes !== '' && Number(form.downtime_minutes) < 0) nextErrors.downtime_minutes = 'Cannot be negative';
+    if (form.time_spent_minutes !== '' && Number(form.time_spent_minutes) < 0) nextErrors.time_spent_minutes = 'Cannot be negative';
+    if (form.complexity_level && !COMPLEXITY_LEVELS.includes(form.complexity_level)) nextErrors.complexity_level = 'Invalid complexity level';
+    if (form.parts_replaced && form.parts_replaced.length > 2000) nextErrors.parts_replaced = 'Must be 2000 characters or fewer';
+    if (form.next_maintenance_due && form.next_maintenance_due < new Date().toISOString().split('T')[0]) nextErrors.next_maintenance_due = 'Must be a future date';
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -54,15 +57,14 @@ export default function ServiceMaintenanceForm({ schedule, onSubmit, onCancel, l
     if (!validate(signatureData)) return;
     onSubmit({
       ...form,
-      labor_cost: form.labor_cost === '' ? null : Number(form.labor_cost),
-      parts_cost: form.parts_cost === '' ? null : Number(form.parts_cost),
-      downtime_minutes: form.downtime_minutes === '' ? null : Number(form.downtime_minutes),
+      time_spent_minutes: form.time_spent_minutes === '' ? 0 : Number(form.time_spent_minutes),
+      complexity_level: form.complexity_level || null,
+      parts_replaced: form.parts_replaced || null,
+      next_maintenance_due: form.next_maintenance_due || null,
       asset_id: schedule?.asset_id || null,
       signature_data: signatureData,
     });
   };
-
-  const totalCost = (Number(form.labor_cost) || 0) + (Number(form.parts_cost) || 0);
 
   return (
     <form className="form-stack" onSubmit={handleSubmit} aria-busy={loading}>
@@ -87,28 +89,33 @@ export default function ServiceMaintenanceForm({ schedule, onSubmit, onCancel, l
         </div>
       </div>
       <fieldset className="form-section">
-        <legend className="form-section__legend">Cost and downtime</legend>
+        <legend className="form-section__legend">Internal Tracking</legend>
         <div className="form-row">
           <div className="form-field">
-            <label className="field-label" htmlFor="service-labor-cost">Labour cost (ZMW)</label>
-            <input className={`input${errors.labor_cost ? ' input--error' : ''}`} id="service-labor-cost" type="number" min="0" step="0.01" inputMode="decimal" value={form.labor_cost} onChange={(event) => handleChange('labor_cost', event.target.value)} aria-invalid={Boolean(errors.labor_cost)} />
-            {errors.labor_cost && <span className="error-text">{errors.labor_cost}</span>}
+            <label className="field-label" htmlFor="service-time-spent">Time Spent (minutes) *</label>
+            <input className={`input${errors.time_spent_minutes ? ' input--error' : ''}`} id="service-time-spent" type="number" min="0" step="1" inputMode="numeric" value={form.time_spent_minutes} onChange={(event) => handleChange('time_spent_minutes', event.target.value)} aria-invalid={Boolean(errors.time_spent_minutes)} required />
+            {errors.time_spent_minutes && <span className="error-text">{errors.time_spent_minutes}</span>}
+            <span className="field-hint">Actual time spent on this maintenance task</span>
           </div>
           <div className="form-field">
-            <label className="field-label" htmlFor="service-parts-cost">Parts cost (ZMW)</label>
-            <input className={`input${errors.parts_cost ? ' input--error' : ''}`} id="service-parts-cost" type="number" min="0" step="0.01" inputMode="decimal" value={form.parts_cost} onChange={(event) => handleChange('parts_cost', event.target.value)} aria-invalid={Boolean(errors.parts_cost)} />
-            {errors.parts_cost && <span className="error-text">{errors.parts_cost}</span>}
-          </div>
-          <div className="form-field">
-            <label className="field-label" htmlFor="service-downtime">Downtime (min)</label>
-            <input className={`input${errors.downtime_minutes ? ' input--error' : ''}`} id="service-downtime" type="number" min="0" step="1" inputMode="numeric" value={form.downtime_minutes} onChange={(event) => handleChange('downtime_minutes', event.target.value)} aria-invalid={Boolean(errors.downtime_minutes)} />
-            {errors.downtime_minutes && <span className="error-text">{errors.downtime_minutes}</span>}
-            <span className="field-hint">How long the asset or service was unavailable</span>
+            <label className="field-label" htmlFor="service-complexity">Complexity Level</label>
+            <select className={`input${errors.complexity_level ? ' input--error' : ''}`} id="service-complexity" value={form.complexity_level} onChange={(event) => handleChange('complexity_level', event.target.value)} aria-invalid={Boolean(errors.complexity_level)}>
+              {COMPLEXITY_LEVELS.map((level) => <option key={level} value={level}>{level.charAt(0).toUpperCase() + level.slice(1)}</option>)}
+            </select>
+            {errors.complexity_level && <span className="error-text">{errors.complexity_level}</span>}
           </div>
         </div>
-        {totalCost > 0 && (
-          <p className="field-hint">Total recorded cost: ZMW {totalCost.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-        )}
+        <div className="form-field">
+          <label className="field-label" htmlFor="service-parts-replaced">Parts Replaced</label>
+          <textarea className={`input${errors.parts_replaced ? ' input--error' : ''}`} id="service-parts-replaced" value={form.parts_replaced} onChange={(event) => handleChange('parts_replaced', event.target.value.slice(0, 2000))} placeholder="List any parts that were replaced" rows={2} aria-invalid={Boolean(errors.parts_replaced)} />
+          {errors.parts_replaced && <span className="error-text">{errors.parts_replaced}</span>}
+        </div>
+        <div className="form-field">
+          <label className="field-label" htmlFor="service-next-maintenance">Next Maintenance Due</label>
+          <input className={`input${errors.next_maintenance_due ? ' input--error' : ''}`} id="service-next-maintenance" type="date" value={form.next_maintenance_due} onChange={(event) => handleChange('next_maintenance_due', event.target.value)} aria-invalid={Boolean(errors.next_maintenance_due)} />
+          {errors.next_maintenance_due && <span className="error-text">{errors.next_maintenance_due}</span>}
+          <span className="field-hint">Suggested date for next preventive maintenance</span>
+        </div>
       </fieldset>
       <div className="form-row">
         <div className="form-field">

@@ -138,7 +138,6 @@ export default function MaintenanceForm({
     reminder_days: initialData?.reminder_days ?? '1',
     status: initialData?.status || 'scheduled',
     duration_minutes: String(initialData?.duration_minutes || 60),
-    estimated_cost: initialData?.estimated_cost ?? '',
     recurrence_frequency: initialData?.recurrence_rule || 'none',
     recurrence_interval: String(initialData?.recurrence_interval || 1),
     recurrence_end_at: toDateTimeLocalInput(initialData?.recurrence_end),
@@ -190,7 +189,6 @@ export default function MaintenanceForm({
     if (form.asset_identifier.length > 255) next.asset_identifier = 'Must be 255 characters or fewer';
     if (form.description.length > 2000) next.description = 'Must be 2000 characters or fewer';
     if (durationMinutes < 15 || durationMinutes > 1440) next.duration_minutes = 'Duration must be between 15 and 1440 minutes';
-    if (form.estimated_cost !== '' && Number(form.estimated_cost) < 0) next.estimated_cost = 'Cost cannot be negative';
     if (form.recurrence_frequency !== 'none') {
       if (Number(form.recurrence_interval) < 1) next.recurrence_interval = 'Interval must be at least 1';
       if (form.recurrence_end_at && form.recurrence_end_at <= form.scheduled_at) {
@@ -224,7 +222,6 @@ export default function MaintenanceForm({
       reminder_days: form.reminder_days === '' ? null : Number(form.reminder_days),
       status: form.status,
       duration_minutes: durationMinutes,
-      estimated_cost: form.estimated_cost === '' ? null : Number(form.estimated_cost),
       recurrence_rule: form.recurrence_frequency,
       recurrence_interval: form.recurrence_frequency === 'none' ? null : Number(form.recurrence_interval) || 1,
       recurrence_end: recurrenceEndAt,
@@ -383,38 +380,23 @@ export default function MaintenanceForm({
           </div>
         </div>
         <div className="form-row">
-          <div className="form-field">
-            <label className="field-label" htmlFor={`${formId}-estimated-cost`}>Estimated cost (ZMW)</label>
-            <input
-              className={fieldClass('estimated_cost')}
-              id={`${formId}-estimated-cost`}
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.estimated_cost}
-              onChange={(e) => handleChange('estimated_cost', e.target.value)}
-              aria-invalid={Boolean(errors.estimated_cost)}
-            />
-            {errors.estimated_cost && <span className="error-text">{errors.estimated_cost}</span>}
-            <span className="field-hint">Budget for this job, used in cost reporting</span>
-          </div>
-          <div className="form-field">
-            <label className="field-label" htmlFor={`${formId}-status`}>Status</label>
-            <select className="input" id={`${formId}-status`} value={form.status} onChange={(e) => handleChange('status', e.target.value)}>
-              {STATUSES.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
-            </select>
-          </div>
+        <div className="form-field">
+          <label className="field-label" htmlFor={`${formId}-status`}>Status</label>
+          <select className="input" id={`${formId}-status`} value={form.status} onChange={(e) => handleChange('status', e.target.value)}>
+            {STATUSES.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
+          </select>
         </div>
         <div className="form-field">
           <label className="field-label" htmlFor={`${formId}-reminder-days`}>Reminder days before</label>
-          <input
-            className="input"
-            id={`${formId}-reminder-days`}
-            type="number"
-            min="0"
-            value={form.reminder_days}
-            onChange={(e) => handleChange('reminder_days', e.target.value)}
-          />
+            <input
+              className="input"
+              id={`${formId}-reminder-days`}
+              type="number"
+              min="0"
+              value={form.reminder_days}
+              onChange={(e) => handleChange('reminder_days', e.target.value)}
+            />
+          </div>
         </div>
       </fieldset>
 

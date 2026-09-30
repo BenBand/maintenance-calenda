@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useAuth } from '../services/auth';
 import { PERMISSIONS } from '../services/permissions';
-import { apiFetch, readApiData } from '../services/api';
+import { apiFetch, downloadPdf, readApiData } from '../services/api';
 import { useApiData } from '../hooks/useApiData';
 import Modal from '../components/Modal';
 import { EmptyState, ErrorState, SkeletonPage } from '../components/AsyncState';
@@ -14,10 +14,15 @@ const RATEABLE_STATUSES = ['resolved', 'closed'];
 
 export default function IncidentsPage() {
   const { user, can } = useAuth();
+  // Reporting is the `user` role's job. The IT roles respond and close, which
+  // is INCIDENT_WRITE, so they never see the Report button.
+  const canReportIncident = can(PERMISSIONS.INCIDENT_CREATE);
   const canWriteIncidents = can(PERMISSIONS.INCIDENT_WRITE);
   const canDeleteIncidents = can(PERMISSIONS.INCIDENT_DELETE);
   const canRate = can(PERMISSIONS.RATING_WRITE);
   const canReadRatings = can(PERMISSIONS.RATING_READ);
+  const canReadIncidents = can(PERMISSIONS.INCIDENT_READ);
+  const canComment = can(PERMISSIONS.COMMENT_WRITE);
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -34,6 +39,17 @@ export default function IncidentsPage() {
   const [ratingError, setRatingError] = useState('');
   const [ratingSaving, setRatingSaving] = useState(false);
   const [ratingsByIncident, setRatingsByIncident] = useState({});
+
+  // The comment thread is how the reporter and the IT team talk to each other
+  // while a fix is in progress, so it loads on demand for the open incident
+  // rather than for every row in the table.
+  const [threadIncident, setThreadIncident] = useState(null);
+  const [threadComments, setThreadComments] = useState([]);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [threadError, setThreadError] = useState('');
+  const [commentDraft, setCommentDraft] = useState('');
+  const [commentSaving, setCommentSaving] = useState(false);
+  const [exportLoadingId, setExportLoadingId] = useState(null);
 
   const loadPage = useCallback(async () => {
     const [incidentsRes, departmentsRes] = await Promise.all([
@@ -104,6 +120,79 @@ export default function IncidentsPage() {
       setRatingError(err.message || 'Unable to save rating');
     } finally {
       setRatingSaving(false);
+    }
+  };
+
+  const openThread = async (incident) => {
+    setActionError('');
+    setThreadError('');
+    setCommentDraft('');
+    setThreadIncident(incident);
+    setThreadLoading(true);
+    try {
+      const response = await apiFetch(`/comments/incident/${incident.id}`, {});
+      const payload = await readApiData(response);
+      setThreadComments(payload?.comments || []);
+    } catch (err) {
+      setThreadError(err.message || 'Unable to load the discussion');
+    } finally {
+      setThreadLoading(false);
+    }
+  };
+
+  const closeThread = () => {
+    setThreadIncident(null);
+    setThreadComments([]);
+    setThreadError('');
+    setCommentDraft('');
+  };
+
+  const handleCommentSubmit = async (event) => {
+    event.preventDefault();
+    if (!threadIncident) return;
+    if (!commentDraft.trim()) {
+      setThreadError('Write a message before sending');
+      return;
+    }
+    setThreadError('');
+    setCommentSaving(true);
+    try {
+      await apiFetch(`/comments/incident/${threadIncident.id}`, {
+        method: 'POST',
+        body: JSON.stringify({ comment: commentDraft }),
+      });
+      setCommentDraft('');
+      const response = await apiFetch(`/comments/incident/${threadIncident.id}`, {});
+      const payload = await readApiData(response);
+      setThreadComments(payload?.comments || []);
+    } catch (err) {
+      setThreadError(err.message || 'Unable to send your message');
+    } finally {
+      setCommentSaving(false);
+    }
+  };
+
+  const handleCommentDelete = async (commentId) => {
+    if (!window.confirm('Delete this message?')) return;
+    if (!threadIncident) return;
+    setThreadError('');
+    try {
+      await apiFetch(`/comments/${commentId}`, { method: 'DELETE' });
+      setThreadComments((current) => current.filter((comment) => comment.id !== commentId));
+    } catch (err) {
+      setThreadError(err.message || 'Unable to delete this message');
+    }
+  };
+
+  const handleExportIncident = async (incidentId) => {
+    setActionError('');
+    setExportLoadingId(incidentId);
+    try {
+      await downloadPdf(`/incidents/${incidentId}/export/pdf`, `incident-${incidentId}.pdf`);
+    } catch (err) {
+      setActionError(err.message || 'Unable to export the incident record');
+    } finally {
+      setExportLoadingId(null);
     }
   };
 
@@ -184,8 +273,12 @@ export default function IncidentsPage() {
   if (pageLoading && !data) return <SkeletonPage label="Loading incidents..." />;
   if (error && !data) return <ErrorState message={error} onRetry={reload} />;
 
-  const showActions = canWriteIncidents || canDeleteIncidents || canRate;
-  const columnCount = 8 + (showActions ? 1 : 0) + 1;
+  // The Discuss and Export actions are available to anyone who can read an
+  // incident, so the column shows even for a role with no write access.
+  const showActions = canComment || canReadIncidents || canWriteIncidents || canDeleteIncidents || canRate;
+  // Reported, Title, Description, Asset, Priority, Status, Reported By = 7,
+  // plus Rating and Actions when those columns are rendered.
+  const columnCount = 7 + (canReadRatings ? 1 : 0) + (showActions ? 1 : 0);
 
   return (
     <div className="page" aria-busy={pageLoading}>
@@ -194,7 +287,7 @@ export default function IncidentsPage() {
           <h1 className="page-title">Incidents</h1>
           <p className="page-subtitle">Report an issue, follow its progress, and rate the fix</p>
         </div>
-        {canWriteIncidents && <button className="button button--primary" type="button" onClick={() => setShowForm(true)}>+ Report Incident</button>}
+        {canReportIncident && <button className="button button--primary" type="button" onClick={() => setShowForm(true)}>+ Report Incident</button>}
       </header>
 
       {(error || actionError) && <div className="inline-alert" role="alert"><span>{error || actionError}</span>{error && <button className="button button--secondary button--small" type="button" onClick={reload}>Retry</button>}</div>}
@@ -274,6 +367,12 @@ export default function IncidentsPage() {
                           {Number(incident.rating_count) > 0 ? 'Edit Rating' : 'Rate'}
                         </button>
                       )}
+                      <button className="button button--secondary button--small" type="button" onClick={() => openThread(incident)} aria-label={`Open discussion for incident ${incident.id}`}>
+                        Discuss
+                      </button>
+                      <button className="button button--secondary button--small" type="button" onClick={() => handleExportIncident(incident.id)} disabled={exportLoadingId === incident.id} aria-label={`Export incident ${incident.id} as PDF`}>
+                        {exportLoadingId === incident.id ? 'Exporting...' : 'Export'}
+                      </button>
                       {canWriteIncidents && <button className="button button--primary button--small" type="button" onClick={() => handleEdit(incident)} aria-label={`Edit incident ${incident.id}`}>Edit</button>}
                       {canDeleteIncidents && <button className="button button--danger button--small" type="button" onClick={() => handleDelete(incident.id)} disabled={actionLoadingId === incident.id} aria-label={`Delete incident ${incident.id}`}>Delete</button>}
                     </div>
@@ -286,7 +385,9 @@ export default function IncidentsPage() {
         </table>
       </div>
 
-      {showForm && canWriteIncidents && (
+      {/* `user` opens this to file a report; admin/manager open it to edit or
+          respond to one they are handling. */}
+      {showForm && (canReportIncident || canWriteIncidents) && (
         <Modal title={editingId ? 'Edit Incident' : 'Report Incident'} onClose={closeForm}>
           <form className="form-stack" onSubmit={handleSubmit} aria-busy={loading}>
             <div className="form-field">
@@ -333,12 +434,17 @@ export default function IncidentsPage() {
                   {PRIORITIES.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
                 </select>
               </div>
-              <div className="form-field">
-                <label className="field-label" htmlFor="incident-status-form">Status</label>
-                <select className="input" id="incident-status-form" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
-                  {STATUSES.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
-                </select>
-              </div>
+              {/* Status is the IT team's call, not the requester's. Letting a
+                  reporter set it would let them mark their own issue resolved
+                  and then rate the fix that never happened. */}
+              {canWriteIncidents && (
+                <div className="form-field">
+                  <label className="field-label" htmlFor="incident-status-form">Status</label>
+                  <select className="input" id="incident-status-form" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
+                    {STATUSES.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="form-actions">
               <button className="button button--primary" type="submit" disabled={loading}>{loading ? 'Saving...' : (editingId ? 'Update Incident' : 'Report Incident')}</button>
@@ -412,6 +518,74 @@ export default function IncidentsPage() {
               <button className="button button--secondary" type="button" onClick={closeRating} disabled={ratingSaving}>Cancel</button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {threadIncident && (
+        <Modal title={`Discussion - ${threadIncident.title}`} onClose={closeThread}>
+          <div className="form-stack">
+            {threadError && <div className="inline-alert" role="alert"><span>{threadError}</span></div>}
+
+            <div className="thread" aria-busy={threadLoading}>
+              {threadLoading && <p className="text-muted">Loading messages...</p>}
+              {!threadLoading && threadComments.length === 0 && (
+                <p className="text-muted">
+                  {canComment ? 'No messages yet. Add the first update below.' : 'No messages yet.'}
+                </p>
+              )}
+              {!threadLoading && threadComments.map((comment) => {
+                const isOwn = String(comment.commented_by) === String(user?.id);
+                // Deleting is restricted to the comment's author, and the admin
+                // who can moderate the thread. A role with no COMMENT_WRITE can
+                // never have authored one, so it never sees this control.
+                const canDelete = canComment && (isOwn || user?.role === 'admin');
+                return (
+                  <article className="thread__message" key={comment.id}>
+                    <header className="thread__meta">
+                      <span className="thread__author">{comment.commented_by_name || 'Unknown'}</span>
+                      <span className="thread__time">{comment.created_at?.split('T')[0] || ''}</span>
+                      {canDelete && (
+                        <button className="button button--danger button--small" type="button" onClick={() => handleCommentDelete(comment.id)} aria-label="Delete message">
+                          Delete
+                        </button>
+                      )}
+                    </header>
+                    <p className="thread__body">{comment.comment}</p>
+                  </article>
+                );
+              })}
+            </div>
+
+            {/* Only admin and developer hold COMMENT_WRITE. Everyone else can
+                still open the thread and read the replies, which is what
+                "receive feedback" means for the person who reported the issue. */}
+            {canComment ? (
+              <form className="form-stack" onSubmit={handleCommentSubmit} aria-busy={commentSaving}>
+                <div className="form-field">
+                  <label className="field-label" htmlFor="thread-comment">Add a message</label>
+                  <textarea
+                    className="input"
+                    id="thread-comment"
+                    value={commentDraft}
+                    onChange={(event) => setCommentDraft(event.target.value)}
+                    placeholder="Share an update or ask a question about this issue"
+                    rows={3}
+                    maxLength={2000}
+                  />
+                </div>
+                <div className="form-actions">
+                  <button className="button button--primary" type="submit" disabled={commentSaving}>
+                    {commentSaving ? 'Sending...' : 'Send Message'}
+                  </button>
+                  <button className="button button--secondary" type="button" onClick={closeThread} disabled={commentSaving}>Close</button>
+                </div>
+              </form>
+            ) : (
+              <div className="form-actions">
+                <button className="button button--secondary" type="button" onClick={closeThread}>Close</button>
+              </div>
+            )}
+          </div>
         </Modal>
       )}
     </div>

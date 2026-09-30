@@ -28,7 +28,7 @@ const RECORD_SELECT = `SELECT sr.*, s.date, s.scheduled_at, s.asset_type, s.asse
 async function createServiceRecord(req, res) {
   const {
     schedule_id, work_performed, outcome, follow_up, signer_name, signer_date, signature_data,
-    labor_cost, parts_cost, downtime_minutes, asset_id,
+    time_spent_minutes, complexity_level, parts_replaced, next_maintenance_due, asset_id,
   } = req.body;
   const userId = req.user.id;
   if (!schedule_id || !work_performed) {
@@ -60,15 +60,12 @@ async function createServiceRecord(req, res) {
       const recordResult = await client.query(
         `INSERT INTO service_records
           (schedule_id, work_performed, outcome, follow_up, signer_name, signer_date, signed_by_user_id,
-           labor_cost, parts_cost, downtime_minutes, asset_id, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+           time_spent_minutes, complexity_level, parts_replaced, next_maintenance_due, asset_id, created_by)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
         [
           schedule_id, work_performed, outcome || null, follow_up || null, signer_name || null,
           signer_date || null, signedByUserId,
-          toNumeric(labor_cost), toNumeric(parts_cost),
-          downtime_minutes === undefined || downtime_minutes === null || downtime_minutes === ''
-            ? null
-            : Math.max(0, parseInt(downtime_minutes, 10) || 0),
+          time_spent_minutes || 0, complexity_level || null, parts_replaced || null, next_maintenance_due || null,
           resolvedAssetId, userId,
         ]
       );
@@ -89,13 +86,12 @@ async function createServiceRecord(req, res) {
 
       if (resolvedAssetId) {
         await client.query(
-          `INSERT INTO asset_events (asset_id, event_type, event_date, description, cost, performed_by, to_status, created_by)
-           VALUES ($1, 'maintenance', $2::date, $3, $4, $5, 'in_service', $6)`,
+          `INSERT INTO asset_lifecycle (asset_id, event_type, event_date, details, performed_by, created_by)
+           VALUES ($1, 'maintained', $2::date, $3, $4, $5)`,
           [
             resolvedAssetId,
             (record.created_at || new Date()).toISOString().slice(0, 10),
-            work_performed.slice(0, 2000),
-            Number(record.total_cost) || 0,
+            JSON.stringify({ description: work_performed.slice(0, 2000), complexity: complexity_level, parts_replaced: parts_replaced, time_spent_minutes: time_spent_minutes }),
             schedule.technician,
             userId,
           ]
@@ -190,7 +186,7 @@ async function updateServiceRecord(req, res) {
   const { id } = req.params;
   const {
     work_performed, outcome, follow_up, signer_name, signer_date, signature_data,
-    labor_cost, parts_cost, downtime_minutes, asset_id,
+    time_spent_minutes, complexity_level, parts_replaced, next_maintenance_due, asset_id,
   } = req.body;
   const userId = req.user.id;
   try {
@@ -207,12 +203,10 @@ async function updateServiceRecord(req, res) {
     if (follow_up !== undefined) { updates.push(`follow_up = $${idx++}`); values.push(follow_up); }
     if (signer_name !== undefined) { updates.push(`signer_name = $${idx++}`); values.push(signer_name); }
     if (signer_date !== undefined) { updates.push(`signer_date = $${idx++}`); values.push(signer_date); }
-    if (labor_cost !== undefined) { updates.push(`labor_cost = $${idx++}`); values.push(toNumeric(labor_cost)); }
-    if (parts_cost !== undefined) { updates.push(`parts_cost = $${idx++}`); values.push(toNumeric(parts_cost)); }
-    if (downtime_minutes !== undefined) {
-      updates.push(`downtime_minutes = $${idx++}`);
-      values.push(downtime_minutes === null || downtime_minutes === '' ? null : Math.max(0, parseInt(downtime_minutes, 10) || 0));
-    }
+    if (time_spent_minutes !== undefined) { updates.push(`time_spent_minutes = $${idx++}`); values.push(time_spent_minutes); }
+    if (complexity_level !== undefined) { updates.push(`complexity_level = $${idx++}`); values.push(complexity_level); }
+    if (parts_replaced !== undefined) { updates.push(`parts_replaced = $${idx++}`); values.push(parts_replaced); }
+    if (next_maintenance_due !== undefined) { updates.push(`next_maintenance_due = $${idx++}`); values.push(next_maintenance_due); }
     if (asset_id !== undefined) { updates.push(`asset_id = $${idx++}`); values.push(asset_id || null); }
 
     let signedByUserId = existing.rows[0].signed_by_user_id;

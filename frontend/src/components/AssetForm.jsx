@@ -48,12 +48,12 @@ export default function AssetForm({ initialData, assetTypes = [], onSubmit, onCa
     assigned_to: initialData?.assigned_to || '',
     supplier: initialData?.supplier || '',
     purchase_date: toDateInput(initialData?.purchase_date),
-    purchase_cost: initialData?.purchase_cost ?? '',
     warranty_start: toDateInput(initialData?.warranty_start),
     warranty_expiry: toDateInput(initialData?.warranty_expiry),
     deployed_date: toDateInput(initialData?.deployed_date),
     end_of_life_date: toDateInput(initialData?.end_of_life_date),
     lifecycle_status: initialData?.lifecycle_status || 'procurement',
+    condition_rating: initialData?.condition_rating || 'good',
     disposal_date: toDateInput(initialData?.disposal_date),
     disposal_method: initialData?.disposal_method || '',
     disposal_reference: initialData?.disposal_reference || '',
@@ -67,7 +67,6 @@ export default function AssetForm({ initialData, assetTypes = [], onSubmit, onCa
     event_type: 'procurement',
     event_date: toDateInput(initialData?.purchase_date) || toDateInput(new Date()),
     description: '',
-    cost: '',
     performed_by: '',
   });
 
@@ -97,7 +96,7 @@ export default function AssetForm({ initialData, assetTypes = [], onSubmit, onCa
     const next = {};
     if (!form.asset_identifier.trim()) next.asset_identifier = 'Asset identifier is required';
     if (!form.asset_type) next.asset_type = 'Asset type is required';
-    if (form.purchase_cost !== '' && Number(form.purchase_cost) < 0) next.purchase_cost = 'Cost cannot be negative';
+    if (form.parts_replaced && form.parts_replaced.length > 2000) next.parts_replaced = 'Must be 2000 characters or fewer';
     if (form.warranty_start && form.warranty_expiry && form.warranty_expiry < form.warranty_start) {
       next.warranty_expiry = 'Warranty expiry must be after the start date';
     }
@@ -125,7 +124,6 @@ export default function AssetForm({ initialData, assetTypes = [], onSubmit, onCa
       .forEach((key) => {
         user[key] = fromDateInput(form[key]);
       });
-    user.purchase_cost = form.purchase_cost === '' ? null : Number(form.purchase_cost);
 
     const payload = { user };
     if (event.enabled) {
@@ -133,7 +131,6 @@ export default function AssetForm({ initialData, assetTypes = [], onSubmit, onCa
         event_type: event.event_type,
         event_date: fromDateInput(event.event_date) || user.purchase_date,
         description: event.description || null,
-        cost: event.cost === '' ? null : Number(event.cost),
         performed_by: event.performed_by || null,
       };
     }
@@ -216,7 +213,14 @@ export default function AssetForm({ initialData, assetTypes = [], onSubmit, onCa
         <legend className="form-section__legend">Procurement</legend>
         <div className="form-row">
           <Field name="purchase_date" label="Purchase date" type="date" />
-          <Field name="purchase_cost" label="Purchase cost (ZMW)" type="number" min="0" step="0.01" />
+          <Field name="condition_rating" label="Condition" type="text" list="condition-ratings" />
+          <datalist id="condition-ratings">
+            <option value="excellent">Excellent</option>
+            <option value="good">Good</option>
+            <option value="fair">Fair</option>
+            <option value="poor">Poor</option>
+            <option value="critical">Critical</option>
+          </datalist>
         </div>
         <div className="form-row">
           <Field name="warranty_start" label="Warranty start" type="date" />
@@ -298,20 +302,6 @@ export default function AssetForm({ initialData, assetTypes = [], onSubmit, onCa
                   onChange={(e) => handleEventChange('event_date', e.target.value)}
                 />
               </div>
-              <div className="form-field">
-                <label className="field-label" htmlFor={`${formId}-event-cost`}>Event cost (ZMW)</label>
-                <input
-                  className="input"
-                  id={`${formId}-event-cost`}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={event.cost}
-                  onChange={(e) => handleEventChange('cost', e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="form-row">
               <div className="form-field">
                 <label className="field-label" htmlFor={`${formId}-event-performed-by`}>Performed by</label>
                 <input

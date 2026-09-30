@@ -46,7 +46,6 @@ async function createSchedule(req, res) {
     reminder_days,
     status,
     duration_minutes,
-    estimated_cost,
     recurrence_rule,
     recurrence_interval,
     recurrence_end,
@@ -62,10 +61,10 @@ async function createSchedule(req, res) {
     const result = await pool.query(
       `INSERT INTO maintenance_schedules
         (scheduled_at, department, room, asset_type, asset_identifier, asset_id, description, technician,
-         technician_user_id, priority, reminder_days, status, duration_minutes, estimated_cost, created_by,
+         technician_user_id, priority, reminder_days, status, duration_minutes, created_by,
          recurrence_rule, recurrence_interval, recurrence_end)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-       RETURNING *, ${SLOT_END_UNQUALIFIED} AS scheduled_end`,
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      RETURNING *, ${SLOT_END_UNQUALIFIED} AS scheduled_end`,
       [
         finalScheduledAt,
         department,
@@ -80,7 +79,6 @@ async function createSchedule(req, res) {
         reminder_days || null,
         status || 'scheduled',
         parsePositiveInt(duration_minutes, 60, 1440),
-        toNumeric(estimated_cost),
         userId,
         recurrence_rule || 'none',
         recurrence_interval ? Number(recurrence_interval) : 1,
@@ -231,7 +229,6 @@ async function updateSchedule(req, res) {
     reminder_days,
     status,
     duration_minutes,
-    estimated_cost,
     recurrence_rule,
     recurrence_interval,
     recurrence_end,
@@ -262,7 +259,6 @@ async function updateSchedule(req, res) {
     if (reminder_days !== undefined) { updates.push(`reminder_days = $${idx++}`); values.push(reminder_days); }
     if (status !== undefined) { updates.push(`status = $${idx++}`); values.push(status); }
     if (duration_minutes !== undefined) { updates.push(`duration_minutes = $${idx++}`); values.push(parsePositiveInt(duration_minutes, 60, 1440)); }
-    if (estimated_cost !== undefined) { updates.push(`estimated_cost = $${idx++}`); values.push(toNumeric(estimated_cost)); }
     if (recurrence_rule !== undefined) { updates.push(`recurrence_rule = $${idx++}`); values.push(recurrence_rule); }
     if (recurrence_interval !== undefined) { updates.push(`recurrence_interval = $${idx++}`); values.push(recurrence_interval ? Number(recurrence_interval) : 1); }
     if (recurrence_end !== undefined) { updates.push(`recurrence_end = $${idx++}`); values.push(recurrence_end ? parseTimestamp(recurrence_end) : null); }
@@ -452,7 +448,7 @@ async function generateRecurrences(req, res) {
     // materialised ones first to keep the set idempotent.
     await pool.query("DELETE FROM maintenance_recurrences WHERE parent_schedule_id = $1 AND status = 'scheduled'", [id]);
 
-    while (current <= end) {
+while (current <= end) {
       occurrences.push({
         parent_schedule_id: p.id,
         occurrence_date: current.toISOString().split('T')[0],
@@ -469,7 +465,6 @@ async function generateRecurrences(req, res) {
         priority: p.priority,
         reminder_days: p.reminder_days,
         duration_minutes: p.duration_minutes,
-        estimated_cost: p.estimated_cost,
         created_by: userId,
       });
       current = new Date(current);
@@ -487,9 +482,9 @@ async function generateRecurrences(req, res) {
         await client.query(
           `INSERT INTO maintenance_recurrences
             (parent_schedule_id, occurrence_date, scheduled_at, status, department, room, asset_type, asset_identifier, asset_id,
-             description, technician, technician_user_id, priority, reminder_days, duration_minutes, estimated_cost, created_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
-          [occ.parent_schedule_id, occ.occurrence_date, occ.scheduled_at, occ.status, occ.department, occ.room, occ.asset_type, occ.asset_identifier, occ.asset_id, occ.description, occ.technician, occ.technician_user_id, occ.priority, occ.reminder_days, occ.duration_minutes, occ.estimated_cost, occ.created_by]
+             description, technician, technician_user_id, priority, reminder_days, duration_minutes, created_by)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+          [occ.parent_schedule_id, occ.occurrence_date, occ.scheduled_at, occ.status, occ.department, occ.room, occ.asset_type, occ.asset_identifier, occ.asset_id, occ.description, occ.technician, occ.technician_user_id, occ.priority, occ.reminder_days, occ.duration_minutes, occ.created_by]
         );
       }
       await client.query('COMMIT');

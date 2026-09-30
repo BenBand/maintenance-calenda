@@ -330,7 +330,7 @@ export function DonutChart({
   );
 }
 
-/** Labelled progress meter, used for completion and budget utilisation. */
+/** Labelled progress meter, used for completion and time-utilisation rates. */
 export function Meter({ label, value, max = 100, display, tone = 'primary', hint }) {
   const percent = Math.max(0, Math.min(100, max > 0 ? (Number(value) / max) * 100 : 0));
   return (

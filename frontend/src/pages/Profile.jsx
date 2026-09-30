@@ -7,7 +7,7 @@ import { ErrorState, SkeletonPage } from '../components/AsyncState';
 const PROFILE_FIELDS = [
   { label: 'Username', value: (user) => user.username },
   { label: 'Email', value: (user) => user.email },
-  { label: 'Role', value: (user) => user.role },
+  { label: 'Role', value: (user) => user.role.charAt(0).toUpperCase() + user.role.slice(1) },
 ];
 
 export default function Profile() {
@@ -33,18 +33,29 @@ export default function Profile() {
 
       {error && <div className="inline-alert" role="alert"><span>{error}</span><button className="button button--secondary button--small" type="button" onClick={reload}>Retry</button></div>}
 
-      <section className="profile-card" aria-labelledby="profile-title">
-        <h2 className="sr-only" id="profile-title">Account details</h2>
-        <dl className="profile-list">
-          {PROFILE_FIELDS.map((field) => (
-            <div className="profile-item" key={field.label}>
-              <dt className="profile-label">{field.label}</dt>
-              <dd className="profile-value">{field.value(user || {}) || '-'}</dd>
+      <div className="profile-wrapper">
+        <section className="profile-card" aria-labelledby="profile-title">
+          <h2 className="sr-only" id="profile-title">Account details</h2>
+          <div className="profile-header">
+            <div className="profile-avatar" aria-hidden="true">
+              {(user?.username || 'U').charAt(0).toUpperCase()}
             </div>
-          ))}
-        </dl>
-        <Link className="button button--secondary" to="/">Back to Dashboard</Link>
-      </section>
+            <h3 className="profile-name">{user?.username}</h3>
+            <p className="profile-role">{user?.role}</p>
+          </div>
+          <dl className="profile-list">
+            {PROFILE_FIELDS.map((field) => (
+              <div className="profile-item" key={field.label}>
+                <dt className="profile-label">{field.label}</dt>
+                <dd className="profile-value">{field.value(user || {}) || '-'}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="profile-actions">
+            <Link className="button button--secondary" to="/">Back to Dashboard</Link>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

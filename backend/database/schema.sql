@@ -27,7 +27,15 @@ CREATE TABLE IF NOT EXISTS maintenance_schedules (
   status VARCHAR(30) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in_progress', 'completed', 'cancelled', 'overdue')),
   created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  scheduled_at TIMESTAMP WITH TIME ZONE,
+  scheduled_date DATE,
+  recurrence_rule VARCHAR(50) DEFAULT 'none' CHECK (recurrence_rule IN ('none', 'daily', 'weekly', 'monthly', 'quarterly', 'annually')),
+  recurrence_end TIMESTAMP WITH TIME ZONE,
+  recurrence_interval INTEGER DEFAULT 1,
+  asset_id INTEGER REFERENCES assets(id) ON DELETE SET NULL,
+  duration_minutes INTEGER DEFAULT 60 CHECK (duration_minutes >= 15 AND duration_minutes <= 1440),
+  technician_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS service_records (
@@ -42,7 +50,13 @@ CREATE TABLE IF NOT EXISTS service_records (
   signed_by VARCHAR(255),
   created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  signed_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  asset_id INTEGER REFERENCES assets(id) ON DELETE SET NULL,
+  time_spent_minutes INTEGER DEFAULT 0 CHECK (time_spent_minutes >= 0),
+  complexity_level VARCHAR(20) CHECK (complexity_level IN ('simple', 'medium', 'complex')),
+  parts_replaced TEXT,
+  next_maintenance_due DATE
 );
 
 CREATE TABLE IF NOT EXISTS service_signatures (
@@ -115,6 +129,7 @@ CREATE TABLE IF NOT EXISTS assets (
   status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'maintenance', 'retired', 'lost')),
   purchase_date DATE,
   warranty_expiry DATE,
+  condition_rating VARCHAR(20) DEFAULT 'good' CHECK (condition_rating IN ('excellent', 'good', 'fair', 'poor', 'critical')),
   notes TEXT,
   created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -143,36 +158,6 @@ CREATE TABLE IF NOT EXISTS downtime_records (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS maintenance_costs (
-  id SERIAL PRIMARY KEY,
-  schedule_id INTEGER REFERENCES maintenance_schedules(id) ON DELETE SET NULL,
-  asset_id INTEGER REFERENCES assets(id) ON DELETE SET NULL,
-  cost_type VARCHAR(50) NOT NULL CHECK (cost_type IN ('parts', 'labor', 'external', 'other')),
-  amount NUMERIC(12, 2) NOT NULL CHECK (amount >= 0),
-  currency VARCHAR(3) DEFAULT 'ZMW',
-  description TEXT,
-  invoice_number VARCHAR(100),
-  invoice_date DATE,
-  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Recurring schedules support
-ALTER TABLE maintenance_schedules
-  ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE,
-  ADD COLUMN IF NOT EXISTS recurrence_pattern VARCHAR(50) CHECK (recurrence_pattern IN ('daily', 'weekly', 'monthly', 'quarterly', 'annually')),
-  ADD COLUMN IF NOT EXISTS recurrence_end_date DATE,
-  ADD COLUMN IF NOT EXISTS parent_schedule_id INTEGER REFERENCES maintenance_schedules(id) ON DELETE SET NULL;
-
--- Time slots for scheduling
-ALTER TABLE maintenance_schedules
-  ADD COLUMN IF NOT EXISTS time_slot_start TIME,
-  ADD COLUMN IF NOT EXISTS time_slot_end TIME;
-
--- Signed by user FK
-ALTER TABLE service_records
-  ADD COLUMN IF NOT EXISTS signed_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
-
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_maintenance_date ON maintenance_schedules(date);
 CREATE INDEX IF NOT EXISTS idx_maintenance_department ON maintenance_schedules(department);
@@ -180,12 +165,17 @@ CREATE INDEX IF NOT EXISTS idx_maintenance_asset_type ON maintenance_schedules(a
 CREATE INDEX IF NOT EXISTS idx_maintenance_status ON maintenance_schedules(status);
 CREATE INDEX IF NOT EXISTS idx_maintenance_technician ON maintenance_schedules(technician);
 CREATE INDEX IF NOT EXISTS idx_maintenance_created_at ON maintenance_schedules(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_maintenance_recurring ON maintenance_schedules(is_recurring) WHERE is_recurring = TRUE;
+CREATE INDEX IF NOT EXISTS idx_maintenance_recurring ON maintenance_schedules(recurrence_rule) WHERE recurrence_rule <> 'none';
 CREATE INDEX IF NOT EXISTS idx_maintenance_parent ON maintenance_schedules(parent_schedule_id);
+CREATE INDEX IF NOT EXISTS idx_maintenance_asset_id ON maintenance_schedules(asset_id);
+CREATE INDEX IF NOT EXISTS idx_maintenance_technician_user ON maintenance_schedules(technician_user_id);
 
 CREATE INDEX IF NOT EXISTS idx_service_schedule ON service_records(schedule_id);
 CREATE INDEX IF NOT EXISTS idx_service_created_at ON service_records(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_service_signed_by ON service_records(signed_by_user_id);
+CREATE INDEX IF NOT EXISTS idx_service_time_spent ON service_records(time_spent_minutes);
+CREATE INDEX IF NOT EXISTS idx_service_complexity ON service_records(complexity_level);
+CREATE INDEX IF NOT EXISTS idx_service_next_maintenance ON service_records(next_maintenance_due);
 
 CREATE INDEX IF NOT EXISTS idx_signature_record ON service_signatures(service_record_id);
 
@@ -210,15 +200,13 @@ CREATE INDEX IF NOT EXISTS idx_assets_type ON assets(asset_type);
 CREATE INDEX IF NOT EXISTS idx_assets_department ON assets(department);
 CREATE INDEX IF NOT EXISTS idx_assets_status ON assets(status);
 CREATE INDEX IF NOT EXISTS idx_assets_assigned ON assets(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_assets_condition ON assets(condition_rating);
 
 CREATE INDEX IF NOT EXISTS idx_lifecycle_asset ON asset_lifecycle(asset_id);
 CREATE INDEX IF NOT EXISTS idx_lifecycle_date ON asset_lifecycle(event_date);
 
 CREATE INDEX IF NOT EXISTS idx_downtime_asset ON downtime_records(asset_id);
 CREATE INDEX IF NOT EXISTS idx_downtime_start ON downtime_records(start_time);
-
-CREATE INDEX IF NOT EXISTS idx_costs_schedule ON maintenance_costs(schedule_id);
-CREATE INDEX IF NOT EXISTS idx_costs_asset ON maintenance_costs(asset_id);
 
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 

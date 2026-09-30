@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import { Meter } from './Charts';
-import { formatCurrency, formatMinutes, humanizeKey } from '../utils/datetime';
+import { formatMinutes, humanizeKey } from '../utils/datetime';
 
 const STAGES = [
   { key: 'procurement', label: 'Procurement' },
@@ -81,8 +81,6 @@ export default function LifecycleTimeline({ events = [], asset }) {
     return (b.id || 0) - (a.id || 0);
   });
 
-  const lifetimeCost = ordered.reduce((sum, event) => sum + (Number(event.cost) || 0), 0);
-
   return (
     <section className="asset-lifecycle" aria-labelledby={headingId}>
       <h3 className="asset-lifecycle__title" id={headingId}>Lifecycle</h3>
@@ -106,7 +104,6 @@ export default function LifecycleTimeline({ events = [], asset }) {
 
       <dl className="asset-lifecycle__facts">
         <div><dt>Purchase date</dt><dd>{asset?.purchase_date || '—'}</dd></div>
-        <div><dt>Purchase cost</dt><dd>{asset?.purchase_cost ? formatCurrency(asset.purchase_cost) : '—'}</dd></div>
         <div><dt>Warranty expiry</dt><dd>{asset?.warranty_expiry || '—'}</dd></div>
         <div><dt>End of life</dt><dd>{asset?.end_of_life_date || '—'}</dd></div>
         <div><dt>Deployed</dt><dd>{asset?.deployed_date || '—'}</dd></div>
@@ -120,9 +117,8 @@ export default function LifecycleTimeline({ events = [], asset }) {
             </dd>
           </div>
         )}
-        <div><dt>Lifetime maintenance cost</dt><dd>{lifetimeCost > 0 ? formatCurrency(lifetimeCost) : '—'}</dd></div>
-        {asset?.lifetime_downtime_minutes > 0 && (
-          <div><dt>Lifetime downtime</dt><dd>{formatMinutes(asset.lifetime_downtime_minutes)}</dd></div>
+        {asset?.lifetime_service_minutes > 0 && (
+          <div><dt>Lifetime service time</dt><dd>{formatMinutes(asset.lifetime_service_minutes)}</dd></div>
         )}
       </dl>
 
@@ -142,7 +138,6 @@ export default function LifecycleTimeline({ events = [], asset }) {
                 {event.description && <p className="timeline__description">{event.description}</p>}
                 <p className="timeline__meta">
                   {event.to_status && <span className="badge badge--neutral">{humanizeKey(event.to_status)}</span>}
-                  {event.cost > 0 && <span>{formatCurrency(event.cost)}</span>}
                   {event.performed_by && <span>by {event.performed_by}</span>}
                   {event.created_by_name && <span>logged by {event.created_by_name}</span>}
                 </p>

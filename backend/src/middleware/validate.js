@@ -114,10 +114,6 @@ const maintenanceScheduleValidation = [
     .optional(isOptional)
     .isInt({ min: 15, max: 1440 })
     .withMessage('Duration must be between 15 and 1440 minutes'),
-  body('estimated_cost')
-    .optional(isOptional)
-    .isFloat({ min: 0 })
-    .withMessage('Estimated cost must be a non-negative number'),
   body('recurrence_rule')
     .optional(isOptional)
     .isIn(RECURRENCE_RULES)
@@ -136,6 +132,8 @@ const maintenanceScheduleValidation = [
     .withMessage('Recurrence end must be a valid date'),
   handleValidationErrors,
 ];
+
+const COMPLEXITY_LEVELS = ['simple', 'medium', 'complex'];
 
 const serviceRecordValidation = [
   body('schedule_id').isInt({ min: 1 }).withMessage('A valid schedule ID is required'),
@@ -164,18 +162,23 @@ const serviceRecordValidation = [
     .isString()
     .isLength({ max: 10000 })
     .withMessage('Signature data is too large'),
-  body('labor_cost')
-    .optional(isOptional)
-    .isFloat({ min: 0 })
-    .withMessage('Labour cost must be a non-negative number'),
-  body('parts_cost')
-    .optional(isOptional)
-    .isFloat({ min: 0 })
-    .withMessage('Parts cost must be a non-negative number'),
-  body('downtime_minutes')
+  body('time_spent_minutes')
     .optional(isOptional)
     .isInt({ min: 0, max: 525600 })
-    .withMessage('Downtime minutes must be a non-negative whole number'),
+    .withMessage('Time spent must be a non-negative whole number (minutes)'),
+  body('complexity_level')
+    .optional(isOptional)
+    .isIn(COMPLEXITY_LEVELS)
+    .withMessage('Complexity must be one of: ' + COMPLEXITY_LEVELS.join(', ')),
+  body('parts_replaced')
+    .optional(isOptional)
+    .trim()
+    .isLength({ max: 2000 })
+    .withMessage('Parts replaced must be under 2000 characters'),
+  body('next_maintenance_due')
+    .optional(isOptional)
+    .isISO8601()
+    .withMessage('Next maintenance due date must be a valid date'),
   body('asset_id').optional(isOptional).isInt({ min: 1 }).withMessage('Asset must be a valid ID'),
   handleValidationErrors,
 ];
@@ -311,7 +314,6 @@ const assetValidation = [
   body('user.assigned_to').optional(isOptional).trim().isLength({ max: 255 }).withMessage('Assigned to must be under 255 characters'),
   body('user.supplier').optional(isOptional).trim().isLength({ max: 255 }).withMessage('Supplier must be under 255 characters'),
   body('user.purchase_date').optional(isOptional).isISO8601().withMessage('Purchase date must be a valid date'),
-  body('user.purchase_cost').optional(isOptional).isFloat({ min: 0 }).withMessage('Purchase cost must be a non-negative number'),
   body('user.warranty_start').optional(isOptional).isISO8601().withMessage('Warranty start must be a valid date'),
   body('user.warranty_expiry').optional(isOptional).isISO8601().withMessage('Warranty expiry must be a valid date'),
   body('user.deployed_date').optional(isOptional).isISO8601().withMessage('Deployment date must be a valid date'),
@@ -320,11 +322,11 @@ const assetValidation = [
   body('user.disposal_method').optional(isOptional).trim().isLength({ max: 100 }).withMessage('Disposal method must be under 100 characters'),
   body('user.disposal_reference').optional(isOptional).trim().isLength({ max: 255 }).withMessage('Disposal reference must be under 255 characters'),
   body('user.lifecycle_status').optional(isOptional).isIn(LIFECYCLE_STATUSES).withMessage('Lifecycle status must be one of: ' + LIFECYCLE_STATUSES.join(', ')),
+  body('user.condition_rating').optional(isOptional).isIn(['excellent', 'good', 'fair', 'poor', 'critical']).withMessage('Condition rating must be one of: excellent, good, fair, poor, critical'),
   body('user.notes').optional(isOptional).trim().isLength({ max: 5000 }).withMessage('Notes must be under 5000 characters'),
   body('lifecycle_event.event_type').optional(isOptional).isIn(ASSET_EVENT_TYPES).withMessage('Event type must be one of: ' + ASSET_EVENT_TYPES.join(', ')),
   body('lifecycle_event.event_date').optional(isOptional).isISO8601().withMessage('Event date must be a valid date'),
   body('lifecycle_event.description').optional(isOptional).trim().isLength({ max: 2000 }).withMessage('Event description must be under 2000 characters'),
-  body('lifecycle_event.cost').optional(isOptional).isFloat({ min: 0 }).withMessage('Event cost must be a non-negative number'),
   body('lifecycle_event.performed_by').optional(isOptional).trim().isLength({ max: 255 }).withMessage('Performed by must be under 255 characters'),
   handleValidationErrors,
 ];
@@ -333,7 +335,6 @@ const assetEventValidation = [
   body('event_type').isIn(ASSET_EVENT_TYPES).withMessage('Event type must be one of: ' + ASSET_EVENT_TYPES.join(', ')),
   body('event_date').isISO8601().withMessage('A valid event date is required'),
   body('description').optional(isOptional).trim().isLength({ max: 2000 }).withMessage('Description must be under 2000 characters'),
-  body('cost').optional(isOptional).isFloat({ min: 0 }).withMessage('Cost must be a non-negative number'),
   body('performed_by').optional(isOptional).trim().isLength({ max: 255 }).withMessage('Performed by must be under 255 characters'),
   handleValidationErrors,
 ];
@@ -383,4 +384,5 @@ module.exports = {
   MAINTENANCE_PRIORITIES,
   RECURRENCE_RULES,
   USER_ROLES,
+  COMPLEXITY_LEVELS,
 };

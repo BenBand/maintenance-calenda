@@ -9,6 +9,11 @@ const RATING_SELECT = `
   LEFT JOIN incidents i ON ir.incident_id = i.id
 `;
 
+// A fix can only be judged once the team has actually finished the work, so
+// the status gate lives here as well as in the UI. Without it the UI-only
+// check is trivially bypassed by posting straight to the endpoint.
+const RATEABLE_STATUSES = ['resolved', 'closed'];
+
 async function getRatingsByIncident(req, res) {
   const { incidentId } = req.params;
   try {
@@ -57,9 +62,17 @@ async function upsertRating(req, res) {
   }
 
   try {
-    const incidentCheck = await pool.query('SELECT id FROM incidents WHERE id = $1', [incidentId]);
+    const incidentCheck = await pool.query(
+      'SELECT id, status FROM incidents WHERE id = $1',
+      [incidentId]
+    );
     if (incidentCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Incident not found' });
+    }
+    if (!RATEABLE_STATUSES.includes(incidentCheck.rows[0].status)) {
+      return res.status(409).json({
+        error: 'You can only rate a fix once the incident is resolved or closed',
+      });
     }
 
     const existing = await pool.query(

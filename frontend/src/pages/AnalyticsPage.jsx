@@ -4,7 +4,7 @@ import { useApiData } from '../hooks/useApiData';
 import { ErrorState, SkeletonPage } from '../components/AsyncState';
 import { BarChart, DonutChart, LineChart, Meter } from '../components/Charts';
 import {
-  formatCompactCurrency, formatCurrency, formatMinutes, formatPercent, humanizeKey,
+  formatMinutes, formatPercent, humanizeKey,
 } from '../utils/datetime';
 import './analytics.css';
 
@@ -31,7 +31,7 @@ const SERIES_COLORS = {
   cancelled: '#9ca3af',
   maintenance: '#f97316',
   procurement: '#6366f1',
-  budget: '#0ea5e9',
+  time_spent: '#0ea5e9',
 };
 
 function colorFor(key, fallbackIndex = 0) {
@@ -84,20 +84,20 @@ export default function AnalyticsPage() {
 
   const loadAnalytics = useCallback(async () => {
     const query = `period=${encodeURIComponent(period)}${interval ? `&interval=${encodeURIComponent(interval)}` : ''}`;
-    const [overviewRes, frequencyRes, workloadRes, trendRes, costRes, uptimeRes] = await Promise.all([
+    const [overviewRes, frequencyRes, workloadRes, trendRes, timeRes, uptimeRes] = await Promise.all([
       apiFetch(`/analytics/overview?${query}`, {}),
       apiFetch(`/analytics/maintenance-frequency?period=${encodeURIComponent(period === 'ytd' ? '12m' : period)}`, {}),
       apiFetch(`/analytics/technician-workload?${query}`, {}),
       apiFetch(`/analytics/overdue-trend?${query}`, {}),
-      apiFetch(`/analytics/cost-by-department?${query}`, {}),
+      apiFetch(`/analytics/time-by-department?${query}`, {}),
       apiFetch(`/analytics/uptime?period=${encodeURIComponent(period === 'ytd' ? '12m' : period)}`, {}),
     ]);
 
     const results = await Promise.all(
-      [overviewRes, frequencyRes, workloadRes, trendRes, costRes, uptimeRes].map((res) => readApiData(res)),
+      [overviewRes, frequencyRes, workloadRes, trendRes, timeRes, uptimeRes].map((res) => readApiData(res)),
     );
-    const [overview, frequency, workload, trend, cost, uptime] = results;
-    return { overview, frequency, workload, trend, cost, uptime };
+    const [overview, frequency, workload, trend, time, uptime] = results;
+    return { overview, frequency, workload, trend, time, uptime };
   }, [period, interval]);
 
   const { data, loading, error, reload } = useApiData(loadAnalytics);
@@ -109,18 +109,17 @@ export default function AnalyticsPage() {
   const frequency = data?.frequency || {};
   const workload = data?.workload || {};
   const trend = data?.trend || {};
-  const cost = data?.cost || {};
+  const time = data?.time || {};
   const uptime = data?.uptime || {};
 
   const schedules = overview.schedules || {};
   const assets = overview.assets || {};
-  const costs = overview.costs || {};
   const incidents = overview.incidents || {};
 
   const byAssetType = frequency.by_asset_type || [];
   const technicians = workload.technicians || [];
   const trendBuckets = trend.buckets || [];
-  const departments = cost.by_department || [];
+  const timeDepartments = time.by_department || [];
   const uptimeDepartments = uptime.by_department || [];
 
   const frequencyChartData = byAssetType.map((row) => ({
@@ -142,14 +141,13 @@ export default function AnalyticsPage() {
     missed: bucket.missed,
   }));
 
-  const costChartData = departments.map((row) => ({
+  const timeChartData = timeDepartments.map((row) => ({
     label: row.department,
-    maintenance: row.maintenance_cost,
-    procurement: row.procurement_spend,
-    budget: row.budgeted,
+    time_spent: row.time_spent_minutes,
+    booked: row.booked_minutes,
   }));
 
-  const donutColors = departments.map((row, index) => colorFor(row.department, index));
+  const donutColors = timeDepartments.map((row, index) => colorFor(row.department, index));
   const assetTypeColors = byAssetType.map((row) => colorFor(row.code, 0));
 
   return (
@@ -157,7 +155,7 @@ export default function AnalyticsPage() {
       <header className="page-header">
         <div>
           <h1 className="page-title">Analytics</h1>
-          <p className="page-subtitle">Maintenance frequency, workload, cost and availability</p>
+          <p className="page-subtitle">Maintenance frequency, workload, time tracking and availability</p>
         </div>
       </header>
 
@@ -211,12 +209,10 @@ export default function AnalyticsPage() {
           <div className="stat-card__label">Overdue</div>
           <div className="stat-card__hint">{trend.summary ? `${formatPercent(trend.summary.overdue_rate)} missed` : ''}</div>
         </div>
-        <div className="stat-card stat-card--compact">
-          <div className="stat-card__number">{formatCompactCurrency(costs.maintenance || 0)}</div>
-          <div className="stat-card__label">Maintenance Cost</div>
-          <div className="stat-card__hint">
-            {costs.budgeted > 0 ? `${formatPercent(costs.budget_utilisation)} of budget` : 'no budget set'}
-          </div>
+        <div className="stat-card stat-card--compact stat-card--info">
+          <div className="stat-card__number">{formatMinutes(time.totals?.time_spent_hours * 60 || 0)}</div>
+          <div className="stat-card__label">Time Spent</div>
+          <div className="stat-card__hint">{time.totals?.total_services || 0} services · {time.totals?.total_complex_services || 0} complex</div>
         </div>
         <div className="stat-card stat-card--compact stat-card--success">
           <div className="stat-card__number">{formatPercent(uptime.fleet?.availability_pct ?? 100, 2)}</div>
@@ -290,7 +286,6 @@ export default function AnalyticsPage() {
                     <p className="workload-item__meta">
                       {tech.completed}/{tech.assigned} done · {tech.overdue} overdue · {formatMinutes(tech.booked_minutes)} booked
                       {tech.avg_resolution_hours != null ? ` · ${Math.round(tech.avg_resolution_hours)}h avg` : ''}
-                      {tech.service_cost > 0 ? ` · ${formatCompactCurrency(tech.service_cost)}` : ''}
                     </p>
                   </li>
                 ))}
@@ -350,50 +345,49 @@ export default function AnalyticsPage() {
         </ChartCard>
 
         <ChartCard
-          id="cost-title"
-          title="Cost per Department"
-          subtitle={cost.totals ? `${formatCurrency(cost.totals.total_cost)} total committed` : ''}
+          id="time-title"
+          title="Time Tracking by Department"
+          subtitle={time.totals ? `${formatMinutes(time.totals.time_spent_hours * 60)} total · ${time.totals.total_services} services` : ''}
         >
-          {departments.length === 0 ? (
-            <p className="chart-empty">No cost data recorded</p>
+          {timeDepartments.length === 0 ? (
+            <p className="chart-empty">No time tracking data recorded</p>
           ) : (
             <>
               <BarChart
-                data={costChartData}
+                data={timeChartData}
                 series={[
-                  { key: 'maintenance', label: 'Maintenance', color: SERIES_COLORS.maintenance },
-                  { key: 'procurement', label: 'Procurement', color: SERIES_COLORS.procurement },
+                  { key: 'time_spent', label: 'Time Spent', color: SERIES_COLORS.maintenance },
+                  { key: 'booked', label: 'Booked', color: 'var(--info)' },
                 ]}
-                valueFormatter={(v) => formatCompactCurrency(v)}
-                caption="Cost per department"
+                valueFormatter={(v) => formatMinutes(v)}
+                caption="Time spent vs booked by department"
               />
               <DonutChart
-                data={departments.map((row, index) => ({
+                data={timeDepartments.map((row, index) => ({
                   label: row.department,
-                  value: row.maintenance_cost,
+                  value: row.time_spent_minutes,
                   color: donutColors[index],
                 }))}
-                valueFormatter={(v) => formatCompactCurrency(v)}
-                caption="Maintenance cost share"
-                centerLabel="maintenance"
-                centerValue={formatCompactCurrency(cost.totals?.maintenance_cost || 0)}
+                valueFormatter={(v) => formatMinutes(v)}
+                caption="Time spent share"
+                centerLabel="hours"
+                centerValue={formatMinutes(time.totals?.time_spent_hours * 60 || 0)}
               />
               <DataTable
-                caption="Cost per department"
-                emptyMessage="No cost data"
-                headers={['Department', 'Assets', 'Maintenance', 'Procurement', 'Budget', 'Variance', 'Share']}
-                rows={departments.map((row) => ({
+                caption="Time tracking by department"
+                emptyMessage="No time data"
+                headers={['Department', 'Assets', 'Services', 'Complex', 'Booked (min)', 'Time Spent (min)', 'Avg/Service (min)', 'Share']}
+                rows={timeDepartments.map((row) => ({
                   key: row.department,
                   cells: [
                     row.department,
                     row.assets,
-                    formatCurrency(row.maintenance_cost),
-                    formatCurrency(row.procurement_spend),
-                    row.budgeted > 0 ? formatCurrency(row.budgeted) : '—',
-                    <span className={row.variance < 0 ? 'value--negative' : 'value--positive'} key="v">
-                      {formatCurrency(row.variance)}
-                    </span>,
-                    formatPercent(row.share_of_maintenance),
+                    row.services,
+                    row.complex_services,
+                    row.booked_minutes,
+                    row.time_spent_minutes,
+                    row.avg_time_per_service || '—',
+                    formatPercent(row.share_of_time),
                   ],
                 }))}
               />

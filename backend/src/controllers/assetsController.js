@@ -13,16 +13,10 @@ const EVENT_TYPES = [
 const WRITABLE_FIELDS = [
   'asset_identifier', 'asset_type', 'make_model', 'serial_number', 'description',
   'department', 'room', 'assigned_to', 'supplier',
-  'purchase_date', 'purchase_cost', 'warranty_start', 'warranty_expiry',
+  'purchase_date', 'warranty_start', 'warranty_expiry',
   'lifecycle_status', 'deployed_date', 'end_of_life_date',
   'disposal_date', 'disposal_method', 'disposal_reference', 'notes',
 ];
-
-function toNumeric(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
 
 function toDateOnly(value) {
   if (!value) return null;
@@ -149,8 +143,8 @@ async function getAssets(req, res) {
                 AND a.warranty_expiry <= ${today} + 90) AS warranty_expiring_soon,
               (a.end_of_life_date IS NOT NULL AND a.end_of_life_date <= ${today} + 180) AS end_of_life_soon,
               (SELECT max(sr.created_at) FROM service_records sr WHERE sr.asset_id = a.id) AS last_serviced_at,
-              (SELECT COALESCE(sum(sr.total_cost), 0) FROM service_records sr WHERE sr.asset_id = a.id) AS lifetime_service_cost,
-              (SELECT COALESCE(sum(sr.downtime_minutes), 0) FROM service_records sr WHERE sr.asset_id = a.id) AS lifetime_downtime_minutes
+              (SELECT COALESCE(sum(sr.time_spent_minutes), 0) FROM service_records sr WHERE sr.asset_id = a.id) AS lifetime_service_minutes,
+              (SELECT count(*) FROM service_records sr WHERE sr.asset_id = a.id) AS lifetime_services
        FROM assets a
        LEFT JOIN asset_types t ON t.code = a.asset_type
        LEFT JOIN users u ON u.id = a.created_by
@@ -199,8 +193,9 @@ async function getAssetById(req, res) {
       ),
       pool.query(
         `SELECT sr.id, sr.work_performed, sr.outcome, sr.follow_up, sr.signer_name,
-                sr.signer_date, sr.created_at, sr.labor_cost, sr.parts_cost, sr.total_cost,
-                sr.downtime_minutes, s.scheduled_at, s.department, s.room
+                sr.signer_date, sr.created_at, sr.time_spent_minutes,
+                sr.complexity_level, sr.parts_replaced,
+                s.scheduled_at, s.department, s.room
          FROM service_records sr
          LEFT JOIN maintenance_schedules s ON s.id = sr.schedule_id
          WHERE sr.asset_id = $1 OR s.asset_id = $1
@@ -249,7 +244,6 @@ async function createAsset(req, res) {
   for (const field of WRITABLE_FIELDS) {
     if (userFields[field] === undefined) continue;
     let value = userFields[field];
-    if (['purchase_cost'].includes(field)) value = toNumeric(value);
     if (['purchase_date', 'warranty_start', 'warranty_expiry', 'deployed_date', 'end_of_life_date', 'disposal_date'].includes(field)) {
       value = toDateOnly(value);
     }
@@ -285,14 +279,13 @@ async function createAsset(req, res) {
     const eventType = EVENT_TYPES.includes(lifecycleEvent.event_type) ? lifecycleEvent.event_type : 'procurement';
 
     await client.query(
-      `INSERT INTO asset_events (asset_id, event_type, event_date, description, cost, performed_by, from_status, to_status, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $8)`,
+      `INSERT INTO asset_events (asset_id, event_type, event_date, description, performed_by, from_status, to_status, created_by)
+       VALUES ($1, $2, $3, $4, $5, NULL, $6, $7)`,
       [
         assetId,
         eventType,
         eventDate,
         lifecycleEvent.description || null,
-        toNumeric(lifecycleEvent.cost),
         lifecycleEvent.performed_by || null,
         columns.includes('lifecycle_status') ? values[columns.indexOf('lifecycle_status')] : 'procurement',
         userId,
@@ -348,7 +341,6 @@ async function updateAsset(req, res) {
     for (const field of WRITABLE_FIELDS) {
       if (fields[field] === undefined) continue;
       let value = fields[field];
-      if (field === 'purchase_cost') value = toNumeric(value);
       if (['purchase_date', 'warranty_start', 'warranty_expiry', 'deployed_date', 'end_of_life_date', 'disposal_date'].includes(field)) {
         value = toDateOnly(value);
       }
@@ -395,8 +387,8 @@ async function updateAsset(req, res) {
       const nextStatus = fields.lifecycle_status;
       if (nextStatus && nextStatus !== previousStatus.value) {
         await client.query(
-          `INSERT INTO asset_events (asset_id, event_type, event_date, description, cost, performed_by, from_status, to_status, created_by)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          `INSERT INTO asset_events (asset_id, event_type, event_date, description, performed_by, from_status, to_status, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [
             id,
             nextStatus === 'disposed' ? 'disposal'
@@ -405,7 +397,6 @@ async function updateAsset(req, res) {
                   : 'status_change',
             toDateOnly(lifecycleEvent.event_date) || new Date().toISOString().slice(0, 10),
             lifecycleEvent.description || `Status changed from ${previousStatus.value} to ${nextStatus}`,
-            toNumeric(lifecycleEvent.cost),
             lifecycleEvent.performed_by || null,
             previousStatus.value,
             nextStatus,
@@ -414,14 +405,13 @@ async function updateAsset(req, res) {
         );
       } else if (lifecycleEvent.event_type) {
         await client.query(
-          `INSERT INTO asset_events (asset_id, event_type, event_date, description, cost, performed_by, created_by)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          `INSERT INTO asset_events (asset_id, event_type, event_date, description, performed_by, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
           [
             id,
             EVENT_TYPES.includes(lifecycleEvent.event_type) ? lifecycleEvent.event_type : 'note',
             toDateOnly(lifecycleEvent.event_date) || new Date().toISOString().slice(0, 10),
             lifecycleEvent.description || null,
-            toNumeric(lifecycleEvent.cost),
             lifecycleEvent.performed_by || null,
             userId,
           ]
@@ -525,7 +515,7 @@ async function getAssetEvents(req, res) {
 async function createAssetEvent(req, res) {
   const { id } = req.params;
   const userId = req.user.id;
-  const { event_type, event_date, description, cost, performed_by } = req.body || {};
+  const { event_type, event_date, description, performed_by } = req.body || {};
 
   if (!EVENT_TYPES.includes(event_type)) {
     return res.status(400).json({ error: `Event type must be one of: ${EVENT_TYPES.join(', ')}` });
@@ -544,15 +534,14 @@ async function createAssetEvent(req, res) {
     try {
       await client.query('BEGIN');
       const result = await client.query(
-        `INSERT INTO asset_events (asset_id, event_type, event_date, description, cost, performed_by, to_status, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `INSERT INTO asset_events (asset_id, event_type, event_date, description, performed_by, to_status, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING *`,
         [
           id,
           event_type,
           toDateOnly(event_date),
           description || null,
-          toNumeric(cost),
           performed_by || null,
           ['retirement', 'disposal'].includes(event_type) ? asset.rows[0].lifecycle_status : null,
           userId,
@@ -729,8 +718,6 @@ async function getAssetStats(req, res) {
           count(*) FILTER (WHERE warranty_expiry >= CURRENT_DATE
                              AND warranty_expiry <= CURRENT_DATE + 90)        AS warranty_expiring,
           count(*) FILTER (WHERE end_of_life_date <= CURRENT_DATE + 180)      AS end_of_life_soon,
-          COALESCE(sum(purchase_cost), 0)                                      AS procurement_spend,
-          COALESCE(avg(purchase_cost), 0)                                      AS avg_purchase_cost,
           -- "date - date" already yields days, so EXTRACT(DAY FROM ...) would
           -- have no interval operand to work with.
           round(COALESCE(avg(CURRENT_DATE - purchase_date)
@@ -741,8 +728,7 @@ async function getAssetStats(req, res) {
     const byType = await pool.query(
       `SELECT t.code, t.label, t.sort_order,
               count(a.id)                                                     AS assets,
-              count(a.id) FILTER (WHERE a.lifecycle_status IN ('deployed','in_service')) AS in_service,
-              COALESCE(sum(a.purchase_cost), 0)                                AS procurement_spend
+              count(a.id) FILTER (WHERE a.lifecycle_status IN ('deployed','in_service')) AS in_service
        FROM asset_types t
        LEFT JOIN assets a ON a.asset_type = t.code
        GROUP BY t.code, t.label, t.sort_order
@@ -762,15 +748,12 @@ async function getAssetStats(req, res) {
         warranty_expired: Number(stats.warranty_expired),
         warranty_expiring: Number(stats.warranty_expiring),
         end_of_life_soon: Number(stats.end_of_life_soon),
-        procurement_spend: Number(stats.procurement_spend),
-        avg_purchase_cost: Number(stats.avg_purchase_cost),
         avg_age_years: Number((Number(stats.avg_age_days) / 365).toFixed(1)),
       },
       by_type: byType.rows.map((row) => ({
         ...row,
         assets: Number(row.assets),
         in_service: Number(row.in_service),
-        procurement_spend: Number(row.procurement_spend),
       })),
     });
   } catch (error) {

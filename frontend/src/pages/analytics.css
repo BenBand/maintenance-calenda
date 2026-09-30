@@ -12,7 +12,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* The trend and cost charts carry the most data, so they span both columns. */
+  /* The trend and time charts carry the most data, so they span both columns. */
   .analytics-grid > .panel--wide {
     grid-column: 1 / -1;
   }

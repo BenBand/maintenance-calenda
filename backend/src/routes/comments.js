@@ -3,7 +3,7 @@ const router = express.Router();
 const {
   getCommentsByIncident, createComment, updateComment, deleteComment,
 } = require('../controllers/commentController');
-const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { authenticateToken, requirePermission, PERMISSIONS } = require('../middleware/auth');
 const { csrfProtection } = require('../middleware/csrf');
 const {
   idParamValidation, incidentIdParamValidation, commentValidation,
@@ -12,27 +12,29 @@ const {
 router.use(authenticateToken, csrfProtection);
 
 router.get('/incident/:incidentId',
-  requirePermission('incident:read'),
+  requirePermission(PERMISSIONS.INCIDENT_READ),
   incidentIdParamValidation,
   getCommentsByIncident
 );
 
+// The thread stays two-way: the requester posts here and so does the IT team
+// responding, so every role that can read an incident can also write to it.
 router.post('/incident/:incidentId',
-  requirePermission('incident:write'),
+  requirePermission(PERMISSIONS.COMMENT_WRITE),
   incidentIdParamValidation,
   commentValidation,
   createComment
 );
 
 router.put('/:id',
-  requirePermission('incident:write'),
+  requirePermission(PERMISSIONS.COMMENT_WRITE),
   idParamValidation,
   commentValidation,
   updateComment
 );
 
 router.delete('/:id',
-  requirePermission('incident:write'),
+  requirePermission(PERMISSIONS.COMMENT_WRITE),
   idParamValidation,
   deleteComment
 );

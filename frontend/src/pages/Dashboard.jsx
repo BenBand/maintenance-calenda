@@ -7,7 +7,7 @@ import MaintenanceForm from '../components/MaintenanceForm';
 import ServiceMaintenanceForm from '../components/ServiceMaintenanceForm';
 import Modal from '../components/Modal';
 import { EmptyState, ErrorState, SkeletonPage } from '../components/AsyncState';
-import { formatSlotRange } from '../utils/datetime';
+import { formatSlotRange, formatMinutes } from '../utils/datetime';
 
 export default function Dashboard() {
   const { user, can } = useAuth();
@@ -116,7 +116,6 @@ export default function Dashboard() {
 
   const summary = overview?.schedules;
   const assets = overview?.assets;
-  const costs = overview?.costs;
 
   return (
     <div className="page" aria-busy={loading}>
@@ -162,15 +161,6 @@ export default function Dashboard() {
               </div>
             </div>
           )}
-          {costs && (
-            <div className="stat-card stat-card--compact">
-              <div className="stat-card__number">{formatCompactCurrency(costs.maintenance)}</div>
-              <div className="stat-card__label">Maintenance Spend</div>
-              <div className="stat-card__hint">
-                {costs.budgeted > 0 ? `${costs.budget_utilisation}% of budget` : 'no budget set'}
-              </div>
-            </div>
-          )}
           {summary.avg_resolution_hours != null && (
             <div className="stat-card stat-card--compact">
               <div className="stat-card__number">{Math.round(summary.avg_resolution_hours)}h</div>
@@ -187,7 +177,7 @@ export default function Dashboard() {
           <div className="quick-links">
             <a className="quick-link" href="/analytics">
               <span className="quick-link__title">Analytics</span>
-              <span className="quick-link__meta">Maintenance frequency, technician workload, overdue trend, cost per department, uptime</span>
+              <span className="quick-link__meta">Maintenance frequency, technician workload, overdue trend, time tracking, uptime</span>
             </a>
             {canReadAssets && (
               <a className="quick-link" href="/assets">
@@ -252,7 +242,7 @@ export default function Dashboard() {
           <div className="table-wrap">
             <table className="data-table data-table--responsive">
               <caption className="sr-only">Recent service records</caption>
-              <thead><tr><th scope="col">Date</th><th scope="col">Asset</th><th scope="col">Work Performed</th><th scope="col">Outcome</th><th scope="col">Cost</th><th scope="col">Signer</th></tr></thead>
+              <thead><tr><th scope="col">Date</th><th scope="col">Asset</th><th scope="col">Work Performed</th><th scope="col">Outcome</th><th scope="col">Time Spent</th><th scope="col">Signer</th></tr></thead>
               <tbody>
                 {serviceRecords.slice(0, 10).map((record) => (
                   <tr key={record.id}>
@@ -260,7 +250,7 @@ export default function Dashboard() {
                     <td data-label="Asset">{record.registry_asset_identifier || record.asset_identifier || record.asset_type?.replace(/_/g, ' ') || '-'}</td>
                     <td data-label="Work performed">{record.work_performed?.substring(0, 60)}{record.work_performed?.length > 60 ? '...' : ''}</td>
                     <td data-label="Outcome">{record.outcome || '-'}</td>
-                    <td data-label="Cost">{record.total_cost > 0 ? formatCurrency(record.total_cost) : '-'}</td>
+                    <td data-label="Time Spent">{record.time_spent_minutes > 0 ? formatMinutes(record.time_spent_minutes) : '-'}</td>
                     {/* `signed_by` was renamed to signer_name_legacy in migration 000004. */}
                     <td data-label="Signer">{record.signer_name || record.signed_by_name || '-'}</td>
                   </tr>
@@ -284,18 +274,5 @@ export default function Dashboard() {
       )}
     </div>
   );
-}
-
-function formatCurrency(value) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return '-';
-  return `ZMW ${amount.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function formatCompactCurrency(value) {
-  const amount = Number(value) || 0;
-  if (amount >= 1_000_000) return `ZMW ${(amount / 1_000_000).toFixed(1)}M`;
-  if (amount >= 1_000) return `ZMW ${(amount / 1_000).toFixed(0)}k`;
-  return `ZMW ${amount.toFixed(0)}`;
 }
 
