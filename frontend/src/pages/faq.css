@@ -1,0 +1,86 @@
+/* Help & FAQ page: a plain list of articles. Kept deliberately simple - a
+   requester comes here to read an answer, not to navigate. */
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.faq-list {
+  display: grid;
+  /* Two columns on a wide screen so the answers read side by side; a single
+     column everywhere the modal/phone rules apply (see mobile.css). */
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.faq-card {
+  padding: 20px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.faq-card__title {
+  margin: 8px 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.faq-card__title::before {
+  content: "?";
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.faq-card__body {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.badge--neutral {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.empty-state {
+  margin: 0;
+  padding: 24px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .faq-list {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .faq-card {
+    padding: 16px;
+  }
+}

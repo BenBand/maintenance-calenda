@@ -33,9 +33,10 @@ const PERMISSIONS = {
   USER_DELETE: 'user:delete',
   RATING_READ: 'rating:read',
   RATING_WRITE: 'rating:write',
+  FAQ_READ: 'faq:read',
 };
 
-const BASELINE = [PERMISSIONS.PROFILE_READ, PERMISSIONS.PROFILE_UPDATE];
+const BASELINE = [PERMISSIONS.PROFILE_READ, PERMISSIONS.PROFILE_UPDATE, PERMISSIONS.FAQ_READ];
 
 // Everyone signed in can follow an issue and read what was rated.
 const ALL_ROLES = [
@@ -91,10 +92,18 @@ const DEVELOPER_PERMISSIONS = [
 // Regular users are the requesters: they report issues, follow progress, read
 // the replies the IT team leaves, and rate the fix once it is done. The thread
 // is read-only for them - only the admin and developer post in it.
+//
+// Their view is deliberately narrow. They get the incident queue as *their own*
+// history (via /incidents/mine), the help articles, and their own profile. The
+// maintenance schedules, asset registry and service records belong to the staff
+// who work the queue, so those read permissions are withheld here: without them
+// the navigation shows nothing but report / history / help, which is all a
+// requester asked for.
 const USER_PERMISSIONS = [
   PERMISSIONS.INCIDENT_CREATE,
+  PERMISSIONS.INCIDENT_READ,
+  PERMISSIONS.RATING_READ,
   PERMISSIONS.RATING_WRITE,
-  ...ALL_ROLES,
   ...BASELINE,
 ];
 

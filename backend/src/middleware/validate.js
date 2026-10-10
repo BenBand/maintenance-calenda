@@ -202,10 +202,14 @@ const incidentValidation = [
     .trim()
     .isLength({ max: 255 })
     .withMessage('Room must be under 255 characters'),
+  // A reporter can name an asset type the fixed list does not cover (the form's
+  // "Other (specify)" choice), so this is bounded by length rather than an enum.
+  // Migration 000018 drops the matching database constraint.
   body('asset_type')
     .optional({ values: 'null' })
-    .isIn(ASSET_TYPES)
-    .withMessage('Asset type must be one of: ' + ASSET_TYPES.join(', ')),
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Asset type must be under 100 characters'),
   body('asset_identifier')
     .optional({ values: 'null' })
     .trim()

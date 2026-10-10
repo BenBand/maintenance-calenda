@@ -18,6 +18,7 @@ const commentRoutes = require('./routes/comments');
 const assetRoutes = require('./routes/assets');
 const analyticsRoutes = require('./routes/analytics');
 const downtimeRoutes = require('./routes/downtime');
+const faqRoutes = require('./routes/faq');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -80,6 +81,7 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/downtime', downtimeRoutes);
+app.use('/api/faq', faqRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

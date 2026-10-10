@@ -28,6 +28,7 @@ export const PERMISSIONS = {
   USER_DELETE: 'user:delete',
   RATING_READ: 'rating:read',
   RATING_WRITE: 'rating:write',
+  FAQ_READ: 'faq:read',
 };
 
 const BASELINE = [PERMISSIONS.PROFILE_READ, PERMISSIONS.PROFILE_UPDATE];
@@ -85,12 +86,16 @@ export const ROLE_PERMISSIONS = {
     ...BASELINE,
   ],
   // Regular users are the requesters: they report issues, follow progress, read
-  // the replies the IT team leaves, and rate the fix once it is done. The
-  // thread is read-only for them - only admin and developer post in it.
+  // the replies the IT team leaves, and rate the fix once it is done. Their view
+  // is deliberately narrow: the maintenance schedules, asset registry and
+  // service records belong to the staff who work the queue, so those read
+  // permissions are withheld. The navigation then shows only the incident
+  // history, the help page and their profile.
   [ROLES.USER]: [
     PERMISSIONS.INCIDENT_CREATE,
+    PERMISSIONS.INCIDENT_READ,
+    PERMISSIONS.RATING_READ,
     PERMISSIONS.RATING_WRITE,
-    ...ALL_ROLES,
     ...BASELINE,
   ],
 };

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
-  createIncident, getAllIncidents, getIncidentById, updateIncident, deleteIncident,
+  createIncident, getAllIncidents, getMyIncidents, getIncidentById, updateIncident, deleteIncident,
 } = require('../controllers/incidentController');
 const { exportIncidentPDF } = require('../controllers/pdfExportController');
 const { authenticateToken, requirePermission, PERMISSIONS } = require('../middleware/auth');
@@ -11,6 +11,9 @@ const { incidentValidation, idParamValidation } = require('../middleware/validat
 router.use(authenticateToken, csrfProtection);
 
 router.get('/', requirePermission(PERMISSIONS.INCIDENT_READ), getAllIncidents);
+// The `user` role needs their own history — they should only ever see the
+// incidents they filed, not the whole queue.
+router.get('/mine', requirePermission(PERMISSIONS.INCIDENT_READ), getMyIncidents);
 router.get('/:id', requirePermission(PERMISSIONS.INCIDENT_READ), idParamValidation, getIncidentById);
 // Reporting is reserved for the `user` role. The IT roles respond to and close
 // incidents, which is the PUT below, so they cannot file requests themselves.

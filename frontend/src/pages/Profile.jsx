@@ -2,6 +2,8 @@ import { useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch, readApiData } from '../services/api';
 import { useApiData } from '../hooks/useApiData';
+import { useAuth } from '../services/auth';
+import { PERMISSIONS } from '../services/permissions';
 import { ErrorState, SkeletonPage } from '../components/AsyncState';
 
 const PROFILE_FIELDS = [
@@ -11,6 +13,8 @@ const PROFILE_FIELDS = [
 ];
 
 export default function Profile() {
+  const { can } = useAuth();
+  const canReadMaintenance = can(PERMISSIONS.MAINTENANCE_READ);
 
   const loadProfile = useCallback(async () => {
     const response = await apiFetch('/auth/me', {});
@@ -52,7 +56,11 @@ export default function Profile() {
             ))}
           </dl>
           <div className="profile-actions">
-            <Link className="button button--secondary" to="/">Back to Dashboard</Link>
+            {/* A user has no dashboard to return to, so the link names the one
+                screen their role actually lives in. */}
+            <Link className="button button--secondary" to={canReadMaintenance ? '/dashboard' : '/incidents'}>
+              {canReadMaintenance ? 'Back to Dashboard' : 'Back to My Incidents'}
+            </Link>
           </div>
         </section>
       </div>

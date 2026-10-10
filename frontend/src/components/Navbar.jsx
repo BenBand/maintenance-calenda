@@ -5,12 +5,13 @@ import { PERMISSIONS } from '../services/permissions';
 import { useTheme } from './ThemeProvider';
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard', shortLabel: 'Home', icon: '⌂' },
-  { to: '/calendar', label: 'Calendar', shortLabel: 'Slots', icon: '▤' },
+  { to: '/dashboard', label: 'Dashboard', shortLabel: 'Home', icon: '.dk', permission: PERMISSIONS.MAINTENANCE_READ },
+  { to: '/calendar', label: 'Calendar', shortLabel: 'Slots', icon: '▦', permission: PERMISSIONS.MAINTENANCE_READ },
   { to: '/assets', label: 'Assets', shortLabel: 'Assets', icon: '◧', permission: PERMISSIONS.ASSET_READ },
   { to: '/analytics', label: 'Analytics', shortLabel: 'Reports', icon: '◨', permission: PERMISSIONS.ANALYTICS_READ },
   { to: '/records', label: 'Records', shortLabel: 'Records', icon: '✓', permission: PERMISSIONS.SERVICE_READ },
   { to: '/incidents', label: 'Incidents', shortLabel: 'Issues', icon: '!', permission: PERMISSIONS.INCIDENT_READ },
+  { to: '/faq', label: 'Help', shortLabel: 'Help', icon: '?', permission: PERMISSIONS.FAQ_READ },
   { to: '/users', label: 'Users', shortLabel: 'Users', icon: '☰', permission: PERMISSIONS.USER_READ },
 ];
 

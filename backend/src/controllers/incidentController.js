@@ -60,6 +60,42 @@ async function getAllIncidents(req, res) {
   }
 }
 
+/**
+ * Returns only the incidents reported by the current user, ordered newest
+ * first. Used by the `user` role so they can see their own history without
+ * being shown other people's requests.
+ */
+async function getMyIncidents(req, res) {
+  const userId = req.user.id;
+  const { status, search, page, limit } = req.query;
+  const offset = ((page || 1) - 1) * (limit || 25);
+  const conditions = ['i.reported_by = $1'];
+  const params = [userId];
+  let idx = 2;
+  if (status) { conditions.push(`i.status = $${idx++}`); params.push(status); }
+  if (search) {
+    conditions.push(`(i.title ILIKE $${idx} OR i.description ILIKE $${idx})`);
+    params.push(`%${search}%`);
+    idx++;
+  }
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
+  try {
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM incidents i ${whereClause}`,
+      params
+    );
+    const total = parseInt(countResult.rows[0].count);
+    const result = await pool.query(
+      `${INCIDENT_SELECT} ${whereClause} ORDER BY i.created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+      [...params, limit || 25, offset]
+    );
+    res.json({ data: result.rows, pagination: { total, page: parseInt(page || 1), limit: parseInt(limit || 25) } });
+  } catch (error) {
+    console.error('Get my incidents error:', error);
+    res.status(500).json({ error: 'Failed to fetch your incidents' });
+  }
+}
+
 async function getIncidentById(req, res) {
   const { id } = req.params;
   try {
@@ -129,4 +165,4 @@ async function deleteIncident(req, res) {
   }
 }
 
-module.exports = { createIncident, getAllIncidents, getIncidentById, updateIncident, deleteIncident };
+module.exports = { createIncident, getAllIncidents, getMyIncidents, getIncidentById, updateIncident, deleteIncident };

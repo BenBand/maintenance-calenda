@@ -4,6 +4,7 @@ import { PERMISSIONS } from '../services/permissions';
 import { apiFetch, downloadPdf, readApiData } from '../services/api';
 import { useApiData } from '../hooks/useApiData';
 import Modal from '../components/Modal';
+import ReportIncidentForm from '../components/ReportIncidentForm';
 import { EmptyState, ErrorState, SkeletonPage } from '../components/AsyncState';
 
 const ASSET_TYPES = ['laptop', 'desktop', 'network_equipment', 'printer'];
@@ -52,15 +53,21 @@ export default function IncidentsPage() {
   const [exportLoadingId, setExportLoadingId] = useState(null);
 
   const loadPage = useCallback(async () => {
-    const [incidentsRes, departmentsRes] = await Promise.all([
-      apiFetch('/incidents', {}),
+    // The `user` role only ever sees their own reports — the queue belongs to
+    // the IT team. Everyone else sees the full list.
+    const isUserOnly = user?.role === 'user' && !canWriteIncidents;
+    const incidentsRes = isUserOnly
+      ? apiFetch('/incidents/mine', {})
+      : apiFetch('/incidents', {});
+    const [incidentsData, departmentsRes] = await Promise.all([
+      readApiData(incidentsRes),
       apiFetch('/maintenance/departments', {}),
     ]);
     return {
-      incidents: await readApiData(incidentsRes),
+      incidents: incidentsData?.data || incidentsData || [],
       departments: await readApiData(departmentsRes),
     };
-  }, []);
+  }, [user?.role, canWriteIncidents]);
 
   const { data, loading: pageLoading, error, reload } = useApiData(loadPage);
   const incidents = data?.incidents || [];
@@ -389,68 +396,19 @@ export default function IncidentsPage() {
           respond to one they are handling. */}
       {showForm && (canReportIncident || canWriteIncidents) && (
         <Modal title={editingId ? 'Edit Incident' : 'Report Incident'} onClose={closeForm}>
-          <form className="form-stack" onSubmit={handleSubmit} aria-busy={loading}>
-            <div className="form-field">
-              <label className="field-label" htmlFor="incident-title">Title *</label>
-              <input className={`input${errors.title ? ' input--error' : ''}`} id="incident-title" type="text" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} required aria-invalid={Boolean(errors.title)} aria-describedby={errors.title ? 'incident-title-error' : undefined} />
-              {errors.title && <span className="error-text" id="incident-title-error">{errors.title}</span>}
-            </div>
-            <div className="form-field">
-              <label className="field-label" htmlFor="incident-description">Description *</label>
-              <textarea className={`input${errors.description ? ' input--error' : ''}`} id="incident-description" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Describe the incident" rows={3} required aria-invalid={Boolean(errors.description)} aria-describedby={errors.description ? 'incident-description-error' : undefined} />
-              {errors.description && <span className="error-text" id="incident-description-error">{errors.description}</span>}
-            </div>
-            <div className="form-row">
-              <div className="form-field">
-                <label className="field-label" htmlFor="incident-department-form">Department</label>
-                <select className="input" id="incident-department-form" value={form.department} onChange={(event) => setForm({ ...form, department: event.target.value })}>
-                  <option value="">Select department</option>
-                  {departments.map((department) => <option key={department} value={department}>{department}</option>)}
-                </select>
-              </div>
-              <div className="form-field">
-                <label className="field-label" htmlFor="incident-room">Room</label>
-                <input className="input" id="incident-room" type="text" value={form.room} onChange={(event) => setForm({ ...form, room: event.target.value })} />
-              </div>
-            </div>
-            <div className="form-row">
-              <div className="form-field">
-                <label className="field-label" htmlFor="incident-asset-type">Asset Type</label>
-                <select className="input" id="incident-asset-type" value={form.asset_type} onChange={(event) => setForm({ ...form, asset_type: event.target.value })}>
-                  <option value="">None</option>
-                  {ASSET_TYPES.map((type) => <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>)}
-                </select>
-              </div>
-              <div className="form-field">
-                <label className="field-label" htmlFor="incident-asset-identifier">Asset Identifier</label>
-                <input className={`input${errors.asset_identifier ? ' input--error' : ''}`} id="incident-asset-identifier" type="text" value={form.asset_identifier} onChange={(event) => setForm({ ...form, asset_identifier: event.target.value })} placeholder="Serial/tag" aria-invalid={Boolean(errors.asset_identifier)} aria-describedby={errors.asset_identifier ? 'incident-asset-identifier-error' : undefined} />
-                {errors.asset_identifier && <span className="error-text" id="incident-asset-identifier-error">{errors.asset_identifier}</span>}
-              </div>
-            </div>
-            <div className="form-row">
-              <div className="form-field">
-                <label className="field-label" htmlFor="incident-priority-form">Priority</label>
-                <select className="input" id="incident-priority-form" value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>
-                  {PRIORITIES.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
-                </select>
-              </div>
-              {/* Status is the IT team's call, not the requester's. Letting a
-                  reporter set it would let them mark their own issue resolved
-                  and then rate the fix that never happened. */}
-              {canWriteIncidents && (
-                <div className="form-field">
-                  <label className="field-label" htmlFor="incident-status-form">Status</label>
-                  <select className="input" id="incident-status-form" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
-                    {STATUSES.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
-                  </select>
-                </div>
-              )}
-            </div>
-            <div className="form-actions">
-              <button className="button button--primary" type="submit" disabled={loading}>{loading ? 'Saving...' : (editingId ? 'Update Incident' : 'Report Incident')}</button>
-              <button className="button button--secondary" type="button" onClick={closeForm} disabled={loading}>Cancel</button>
-            </div>
-          </form>
+          <ReportIncidentForm
+            editingId={editingId}
+            form={form}
+            setForm={setForm}
+            errors={errors}
+            loading={loading}
+            actionError={actionError}
+            departments={departments}
+            onSubmit={handleSubmit}
+            onClose={closeForm}
+            userRole={user?.role}
+            canWriteIncidents={canWriteIncidents}
+          />
         </Modal>
       )}
 
