@@ -57,8 +57,13 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(OFFLINE_FALLBACK, copy));
+          // Only a good response may become the offline shell. A 404 or a 503
+          // seen during a transient outage would otherwise be remembered and
+          // replayed as the app on every later refresh.
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(OFFLINE_FALLBACK, copy));
+          }
           return response;
         })
         .catch(() => caches.match(OFFLINE_FALLBACK).then((cached) => cached || caches.match('/')))

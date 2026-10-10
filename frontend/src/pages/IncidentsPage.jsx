@@ -56,16 +56,18 @@ export default function IncidentsPage() {
     // The `user` role only ever sees their own reports — the queue belongs to
     // the IT team. Everyone else sees the full list.
     const isUserOnly = user?.role === 'user' && !canWriteIncidents;
-    const incidentsRes = isUserOnly
-      ? apiFetch('/incidents/mine', {})
-      : apiFetch('/incidents', {});
-    const [incidentsData, departmentsRes] = await Promise.all([
-      readApiData(incidentsRes),
+    // Both reads are issued together so the page renders in one round trip, but
+    // they must settle BEFORE readApiData sees them: it expects a Response, and
+    // handing it the pending promise throws on `response.headers.get`.
+    const [incidentsRes, departmentsRes] = await Promise.all([
+      isUserOnly ? apiFetch('/incidents/mine', {}) : apiFetch('/incidents', {}),
       apiFetch('/maintenance/departments', {}),
     ]);
+    const incidentsData = await readApiData(incidentsRes);
+    const departmentsData = await readApiData(departmentsRes);
     return {
-      incidents: incidentsData?.data || incidentsData || [],
-      departments: await readApiData(departmentsRes),
+      incidents: Array.isArray(incidentsData) ? incidentsData : [],
+      departments: Array.isArray(departmentsData) ? departmentsData : [],
     };
   }, [user?.role, canWriteIncidents]);
 

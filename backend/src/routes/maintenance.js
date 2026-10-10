@@ -15,7 +15,7 @@ router.use(authenticateToken, csrfProtection);
 
 router.get('/upcoming', requirePermission('maintenance:read'), getUpcoming);
 router.get('/overdue', requirePermission('maintenance:read'), getOverdue);
-router.get('/departments', requirePermission('maintenance:read'), getDepartments);
+router.get('/departments', getDepartments);
 router.get('/date/:date', requirePermission('maintenance:read'), getSchedulesByDate);
 router.get('/', requirePermission('maintenance:read'), getAllSchedules);
 router.get('/:id', requirePermission('maintenance:read'), idParamValidation, getScheduleById);
