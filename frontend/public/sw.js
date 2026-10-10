@@ -1,12 +1,12 @@
 const CACHE_NAME = 'maintenance-calendar-v2';
-const OFFLINE_FALLBACK = './index.html';
+const OFFLINE_FALLBACK = '/index.html';
 const APP_SHELL = [
-  './',
-  './index.html',
-  './manifest.webmanifest',
-  './pwa-icon-192.png',
-  './pwa-icon-512.png',
-  './apple-touch-icon.png',
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/pwa-icon-192.png',
+  '/pwa-icon-512.png',
+  '/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -61,7 +61,7 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(OFFLINE_FALLBACK, copy));
           return response;
         })
-        .catch(() => caches.match(OFFLINE_FALLBACK).then((cached) => cached || caches.match('./')))
+        .catch(() => caches.match(OFFLINE_FALLBACK).then((cached) => cached || caches.match('/')))
     );
     return;
   }
