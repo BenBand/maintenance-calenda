@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { apiFetch, readApiData } from '../services/api';
 import { useApiData } from '../hooks/useApiData';
 import { useAuth } from '../services/auth';
@@ -13,7 +13,8 @@ const PROFILE_FIELDS = [
 ];
 
 export default function Profile() {
-  const { can } = useAuth();
+  const { can, logout } = useAuth();
+  const navigate = useNavigate();
   const canReadMaintenance = can(PERMISSIONS.MAINTENANCE_READ);
 
   const loadProfile = useCallback(async () => {
@@ -22,6 +23,11 @@ export default function Profile() {
   }, []);
 
   const { data: user, loading, error, reload } = useApiData(loadProfile);
+
+  const handleLogout = useCallback(() => {
+    logout();
+    navigate('/login', { replace: true });
+  }, [logout, navigate]);
 
   if (loading && !user) return <SkeletonPage label="Loading profile..." />;
   if (error && !user) return <ErrorState message={error} onRetry={reload} />;
@@ -56,6 +62,9 @@ export default function Profile() {
             ))}
           </dl>
           <div className="profile-actions">
+            <button className="button button--danger" type="button" onClick={handleLogout}>
+              Log out
+            </button>
             {/* A user has no dashboard to return to, so the link names the one
                 screen their role actually lives in. */}
             <Link className="button button--secondary" to={canReadMaintenance ? '/dashboard' : '/incidents'}>
