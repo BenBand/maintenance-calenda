@@ -93,18 +93,20 @@ export default function Navbar() {
                 onClick={closeMenu}
                 aria-current={isActive ? 'page' : undefined}
               >
-                {item.label}
+                <span className="navbar__link-icon" aria-hidden="true">{item.icon}</span>
+                <span className="navbar__link-label">{item.label}</span>
               </Link>
             );
           })}
           <Link
-            className={`navbar__avatar${location.pathname === '/profile' ? ' navbar__link--active' : ''}`}
+            className={`navbar__link${location.pathname === '/profile' ? ' navbar__link--active' : ''}`}
             to="/profile"
             onClick={closeMenu}
             aria-label={`View profile for ${user?.username || 'user'}`}
             aria-current={location.pathname === '/profile' ? 'page' : undefined}
           >
-            <span aria-hidden="true">{user?.username?.charAt(0).toUpperCase() || '?'}</span>
+            <span className="navbar__link-icon" aria-hidden="true">{user?.username?.charAt(0).toUpperCase() || '?'}</span>
+            <span className="navbar__link-label">Profile</span>
           </Link>
         </nav>
       </div>
