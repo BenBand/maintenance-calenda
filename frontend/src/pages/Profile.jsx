@@ -33,7 +33,7 @@ export default function Profile() {
   if (error && !user) return <ErrorState message={error} onRetry={reload} />;
 
   return (
-    <div className="page" aria-busy={loading}>
+    <div className="page page--narrow" aria-busy={loading}>
       <header className="page-header">
         <div>
           <h1 className="page-title">Profile</h1>

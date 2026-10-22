@@ -33,7 +33,7 @@ const EVENT_LABELS = {
  * `user` plus an optional `lifecycle_event` that records the transition in the
  * same transaction, so the payload is assembled here.
  */
-export default function AssetForm({ initialData, assetTypes = [], onSubmit, onCancel, submitLabel, loading = false }) {
+export default function AssetForm({ initialData, assetTypes = [], departments = [], onSubmit, onCancel, submitLabel, loading = false }) {
   const formId = useId();
   const isEdit = Boolean(initialData);
 
@@ -167,16 +167,25 @@ export default function AssetForm({ initialData, assetTypes = [], onSubmit, onCa
           <Field name="asset_identifier" label="Asset identifier *" placeholder="e.g. LT-014" maxLength={255} />
           <div className="form-field">
             <label className="field-label" htmlFor={`${formId}-asset_type`}>Asset type *</label>
+            {assetTypes && assetTypes.length > 0 ? (
+              <select
+                className={fieldClass('asset_type')}
+                id={`${formId}-asset_type`}
+                value={form.asset_type}
+                onChange={(e) => handleChange('asset_type', e.target.value)}
+              >
+                {assetTypes.map((type) => <option key={type.code} value={type.code}>{type.label || type.code.replace(/_/g, ' ')}</option>)}
+              </select>
+            ) : (
             <select
-              className={fieldClass('asset_type')}
-              id={`${formId}-asset_type`}
-              value={form.asset_type}
-              onChange={(e) => handleChange('asset_type', e.target.value)}
-              aria-invalid={Boolean(errors.asset_type)}
+              className={fieldClass('status')}
+              id={`${formId}-status`}
+              value={form.status}
+              onChange={(e) => handleChange('status', e.target.value)}
             >
-              {assetTypes.length === 0 && <option value={form.asset_type}>{form.asset_type}</option>}
-              {assetTypes.map((type) => <option key={type.code} value={type.code}>{type.label}</option>)}
+              {STATUSES.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
             </select>
+            )}
             {errors.asset_type && <span className="error-text">{errors.asset_type}</span>}
           </div>
         </div>
@@ -200,7 +209,29 @@ export default function AssetForm({ initialData, assetTypes = [], onSubmit, onCa
       <fieldset className="form-section">
         <legend className="form-section__legend">Ownership and location</legend>
         <div className="form-row">
-          <Field name="department" label="Department" maxLength={255} />
+          <div className="form-field">
+            <label className="field-label" htmlFor={`${formId}-department`}>Department</label>
+            {departments && departments.length > 0 ? (
+              <select
+                className={fieldClass('department')}
+                id={`${formId}-department`}
+                value={form.department}
+                onChange={(e) => handleChange('department', e.target.value)}
+              >
+                <option value="">Select department</option>
+                {departments.map((department) => <option key={department} value={department}>{department}</option>)}
+              </select>
+            ) : (
+              <input
+                className={fieldClass('department')}
+                id={`${formId}-department`}
+                type="text"
+                value={form.department}
+                onChange={(e) => handleChange('department', e.target.value.slice(0, 255))}
+                placeholder="e.g. ICT"
+              />
+            )}
+          </div>
           <Field name="room" label="Room / location" maxLength={255} />
         </div>
         <div className="form-row">

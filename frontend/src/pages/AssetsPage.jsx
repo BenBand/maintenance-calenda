@@ -210,6 +210,7 @@ function AssetDetail({ assetId, assetTypes, canWrite, onChanged, onClose }) {
           <AssetForm
             initialData={asset}
             assetTypes={assetTypes}
+            departments={departments}
             onSubmit={handleEdit}
             onCancel={() => setShowEdit(false)}
             submitLabel="Save changes"
@@ -302,7 +303,7 @@ export default function AssetsPage() {
   };
 
   return (
-    <div className="page" aria-busy={loading}>
+    <div className="page page--wide" aria-busy={loading}>
       <header className="page-header">
         <div>
           <h1 className="page-title">Asset Registry</h1>
@@ -494,6 +495,7 @@ export default function AssetsPage() {
         <Modal title="Register Asset" onClose={() => setShowCreate(false)}>
           <AssetForm
             assetTypes={assetTypes}
+            departments={departments}
             onSubmit={handleCreate}
             onCancel={() => setShowCreate(false)}
             submitLabel="Register asset"

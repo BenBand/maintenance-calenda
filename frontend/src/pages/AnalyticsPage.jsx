@@ -151,7 +151,7 @@ export default function AnalyticsPage() {
   const assetTypeColors = byAssetType.map((row) => colorFor(row.code, 0));
 
   return (
-    <div className="page" aria-busy={loading}>
+    <div className="page page--wide" aria-busy={loading}>
       <header className="page-header">
         <div>
           <h1 className="page-title">Analytics</h1>

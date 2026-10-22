@@ -242,17 +242,28 @@ export default function ReportIncidentForm({
           <label className="field-label" htmlFor={`${formId}-department`}>Department</label>
           {otherFields.department ? (
             <>
-              <input
-                className={`input${errors.department ? ' input--error' : ''}`}
+            {departments && departments.length > 0 ? (
+              <select
+                className={fieldClass('department')}
                 id={`${formId}-department`}
-                type="text"
                 value={form.department}
-                onChange={(event) => handleOtherChange('department', event.target.value.slice(0, 255))}
-                placeholder="Type the department"
-                maxLength={255}
+                onChange={(e) => handleChange('department', e.target.value)}
                 aria-invalid={Boolean(errors.department)}
-                aria-describedby={describedBy('department', errors.department)}
-              />
+              >
+                <option value="">Select department</option>
+                {departments.map((department) => <option key={department} value={department}>{department}</option>)}
+              </select>
+            ) : (
+            <select
+              className={fieldClass('asset_type')}
+              id={`${formId}-asset-type`}
+              value={form.asset_type}
+              onChange={(e) => handleChange('asset_type', e.target.value)}
+            >
+              <option value="">Select asset type</option>
+              {ASSET_TYPES.map((type) => <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>)}
+            </select>
+            )}
               <span className="field-hint">Not in the list? Type it in.</span>
             </>
           ) : (

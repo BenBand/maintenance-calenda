@@ -290,7 +290,7 @@ export default function IncidentsPage() {
   const columnCount = 7 + (canReadRatings ? 1 : 0) + (showActions ? 1 : 0);
 
   return (
-    <div className="page" aria-busy={pageLoading}>
+    <div className="page page--wide" aria-busy={pageLoading}>
       <header className="page-header">
         <div>
           <h1 className="page-title">Incidents</h1>

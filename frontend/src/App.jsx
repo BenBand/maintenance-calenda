@@ -65,3 +65,5 @@ export default function App() {
     </Router>
   );
 }
+import NoticesPage from './pages/NoticesPage';
+

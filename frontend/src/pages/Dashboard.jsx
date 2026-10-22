@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useAuth } from '../services/auth';
+import NoticeBanner from '../components/NoticeBanner';
 import { PERMISSIONS } from '../services/permissions';
 import { apiFetch, readApiData, readApiArray } from '../services/api';
 import { useApiData } from '../hooks/useApiData';
@@ -118,7 +119,7 @@ export default function Dashboard() {
   const assets = overview?.assets;
 
   return (
-    <div className="page" aria-busy={loading}>
+    <div className="page page--wide" aria-busy={loading}>
       <header className="page-header">
         <div>
           <h1 className="page-title">Dashboard</h1>
@@ -264,7 +265,14 @@ export default function Dashboard() {
 
       {showAddForm && canWriteSchedules && (
         <Modal title="Add Maintenance Schedule" onClose={() => setShowAddForm(false)}>
-          <MaintenanceForm onSubmit={handleAddSubmit} onCancel={() => setShowAddForm(false)} submitLabel="Add Schedule" loading={actionLoading} />
+          <MaintenanceForm
+            onSubmit={handleAddSubmit}
+            onCancel={() => setShowAddForm(false)}
+            submitLabel="Add Schedule"
+            loading={actionLoading}
+            departments={[]}
+            technicians={[]}
+          />
         </Modal>
       )}
       {showServiceForm && selectedSchedule && (

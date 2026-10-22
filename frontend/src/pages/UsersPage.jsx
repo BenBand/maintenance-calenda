@@ -123,7 +123,7 @@ export default function UsersPage() {
   if (error && !data) return <ErrorState message={error} onRetry={reload} />;
 
   return (
-    <div className="page" aria-busy={loading}>
+    <div className="page page--wide" aria-busy={loading}>
       <header className="page-header">
         <div>
           <h1 className="page-title">User Management</h1>

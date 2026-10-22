@@ -199,7 +199,7 @@ export default function CalendarPage() {
   if (error && !data) return <ErrorState message={error} onRetry={reload} />;
 
   return (
-    <div className="page calendar-page" aria-busy={loading}>
+    <div className="page page--wide calendar-page" aria-busy={loading}>
       <header className="page-header">
         <div>
           <h1 className="page-title">Maintenance Schedule</h1>
@@ -387,6 +387,8 @@ export default function CalendarPage() {
             initialData={editingSchedule}
             prefill={prefill}
             availability={data?.availability}
+            departments={departments}
+            technicians={technicians}
             onSubmit={handleSubmit}
             onCancel={() => { setShowForm(false); setEditingSchedule(null); setPrefill(null); }}
             submitLabel={editingSchedule ? 'Update' : 'Add Schedule'}

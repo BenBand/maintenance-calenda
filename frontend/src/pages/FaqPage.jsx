@@ -30,7 +30,7 @@ export default function FaqPage() {
   if (error && !data) return <ErrorState message={error} onRetry={reload} />;
 
   return (
-    <div className="page" aria-busy={loading}>
+    <div className="page page--narrow" aria-busy={loading}>
       <header className="page-header">
         <div>
           <h1 className="page-title">Help &amp; FAQ</h1>

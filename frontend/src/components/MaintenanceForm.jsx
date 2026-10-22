@@ -122,6 +122,8 @@ export default function MaintenanceForm({
   onCancel,
   submitLabel,
   loading = false,
+  departments = [],
+  technicians = [],
 }) {
   const initialScheduledAt = initialData?.scheduled_at || prefill?.scheduled_at || initialData?.date || '';
   const [form, setForm] = useState({
@@ -288,31 +290,57 @@ export default function MaintenanceForm({
         <div className="form-row">
           <div className="form-field">
             <label className="field-label" htmlFor={`${formId}-department`}>Department *</label>
-            <input
-              className={fieldClass('department')}
-              id={`${formId}-department`}
-              type="text"
-              value={form.department}
-              onChange={(e) => handleChange('department', e.target.value.slice(0, 255))}
-              placeholder="e.g. IT, Finance, HR"
-              required
-              aria-invalid={Boolean(errors.department)}
-            />
+            {(departments && departments.length > 0) ? (
+              <select
+                className={fieldClass('department')}
+                id={`${formId}-department`}
+                value={form.department}
+                onChange={(e) => handleChange('department', e.target.value)}
+                aria-invalid={Boolean(errors.department)}
+              >
+                <option value="">Select department</option>
+                {departments.map((department) => <option key={department} value={department}>{department}</option>)}
+              </select>
+            ) : (
+              <input
+                className={fieldClass('department')}
+                id={`${formId}-department`}
+                type="text"
+                value={form.department}
+                onChange={(e) => handleChange('department', e.target.value.slice(0, 255))}
+                placeholder="e.g. ICT, Finance, Health"
+                required
+                aria-invalid={Boolean(errors.department)}
+              />
+            )}
             {errors.department && <span className="error-text">{errors.department}</span>}
           </div>
           <div className="form-field">
-            <label className="field-label" htmlFor={`${formId}-room`}>Room / location *</label>
-            <input
-              className={fieldClass('room')}
-              id={`${formId}-room`}
-              type="text"
-              value={form.room}
-              onChange={(e) => handleChange('room', e.target.value.slice(0, 255))}
-              placeholder="e.g. Server Room, 12"
-              required
-              aria-invalid={Boolean(errors.room)}
-            />
-            {errors.room && <span className="error-text">{errors.room}</span>}
+            <label className="field-label" htmlFor={`${formId}-technician`}>Technician *</label>
+            {(technicians && technicians.length > 0) ? (
+              <select
+                className={fieldClass('technician')}
+                id={`${formId}-technician`}
+                value={form.technician}
+                onChange={(e) => handleChange('technician', e.target.value)}
+                aria-invalid={Boolean(errors.technician)}
+              >
+                <option value="">Select technician</option>
+                {technicians.map((tech) => <option key={tech} value={tech}>{tech}</option>)}
+              </select>
+            ) : (
+              <input
+                className={fieldClass('technician')}
+                id={`${formId}-technician`}
+                type="text"
+                value={form.technician}
+                onChange={(e) => handleChange('technician', e.target.value.slice(0, 255))}
+                placeholder="Assigned technician name"
+                required
+                aria-invalid={Boolean(errors.technician)}
+              />
+            )}
+            {errors.technician && <span className="error-text">{errors.technician}</span>}
           </div>
         </div>
         <div className="form-row">

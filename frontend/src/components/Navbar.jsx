@@ -10,7 +10,8 @@ const NAV_ITEMS = [
   { to: '/assets', label: 'Assets', shortLabel: 'Assets', icon: '◧', permission: PERMISSIONS.ASSET_READ },
   { to: '/analytics', label: 'Analytics', shortLabel: 'Reports', icon: '◨', permission: PERMISSIONS.ANALYTICS_READ },
   { to: '/records', label: 'Records', shortLabel: 'Records', icon: '✓', permission: PERMISSIONS.SERVICE_READ },
-  { to: '/incidents', label: 'Incidents', shortLabel: 'Issues', icon: '!', permission: PERMISSIONS.INCIDENT_READ },
+  { to: '/incidents', label: 'IT Helpdesk', shortLabel: 'Helpdesk', icon: '!', permission: PERMISSIONS.INCIDENT_READ },
+  { to: '/notices', label: 'Notices', shortLabel: 'Notices', icon: '📢', permission: PERMISSIONS.INCIDENT_READ },
   { to: '/faq', label: 'Help', shortLabel: 'Help', icon: '?', permission: PERMISSIONS.FAQ_READ },
   { to: '/users', label: 'Users', shortLabel: 'Users', icon: '☰', permission: PERMISSIONS.USER_READ },
 ];

@@ -124,3 +124,6 @@ startServer().catch((err) => {
 });
 
 module.exports = app;
+
+const noticesRouter = require('./routes/notices');
+app.use('/api/notices', noticesRouter);

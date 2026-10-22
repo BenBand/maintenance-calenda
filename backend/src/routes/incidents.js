@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const {
-  createIncident, getAllIncidents, getMyIncidents, getIncidentById, updateIncident, deleteIncident,
+  createIncident, getAllIncidents, getMyIncidents, getIncidentById, 
+  updateIncident, deleteIncident, acknowledgeIncident, assignIncident
 } = require('../controllers/incidentController');
 const { exportIncidentPDF } = require('../controllers/pdfExportController');
 const { authenticateToken, requirePermission, PERMISSIONS } = require('../middleware/auth');
@@ -19,6 +20,8 @@ router.get('/:id', requirePermission(PERMISSIONS.INCIDENT_READ), idParamValidati
 // incidents, which is the PUT below, so they cannot file requests themselves.
 router.post('/', requirePermission(PERMISSIONS.INCIDENT_CREATE), incidentValidation, createIncident);
 router.put('/:id', requirePermission(PERMISSIONS.INCIDENT_WRITE), idParamValidation, incidentValidation, updateIncident);
+router.post('/:id/acknowledge', requirePermission(PERMISSIONS.INCIDENT_WRITE), idParamValidation, acknowledgeIncident);
+router.post('/:id/assign', requirePermission(PERMISSIONS.INCIDENT_WRITE), idParamValidation, assignIncident);
 router.delete('/:id', requirePermission(PERMISSIONS.INCIDENT_DELETE), idParamValidation, deleteIncident);
 router.get('/:id/export/pdf', requirePermission(PERMISSIONS.INCIDENT_READ), idParamValidation, exportIncidentPDF);
 
