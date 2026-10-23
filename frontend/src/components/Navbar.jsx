@@ -56,14 +56,6 @@ export default function Navbar() {
         </Link>
 
         <div className="navbar__tools">
-          <button
-            className="navbar__utility-button"
-            type="button"
-            onClick={toggleTheme}
-            aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
-          >
-            <span aria-hidden="true">{theme === 'light' ? 'Dark' : 'Light'}</span>
-          </button>
           {installPrompt && (
             <button className="navbar__utility-button navbar__install-button" type="button" onClick={installApp}>
               Install app
@@ -82,7 +74,7 @@ export default function Navbar() {
         </div>
 
         <nav className={`navbar__nav${menuOpen ? ' navbar__nav--open' : ''}`} id="primary-navigation" aria-label="Primary navigation">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.map((item, index) => {
             if (item.permission && !can(item.permission)) return null;
             const isActive = location.pathname === item.to;
             return (
@@ -97,6 +89,14 @@ export default function Navbar() {
               </Link>
             );
           })}
+          <button
+            className="navbar__link navbar__theme-link"
+            type="button"
+            onClick={toggleTheme}
+            aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+          >
+            {theme === 'light' ? 'Dark' : 'Light'}
+          </button>
           <Link
             className={`navbar__avatar${location.pathname === '/profile' ? ' navbar__link--active' : ''}`}
             to="/profile"
