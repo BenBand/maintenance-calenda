@@ -10,8 +10,7 @@ const NAV_ITEMS = [
   { to: '/assets', label: 'Assets', shortLabel: 'Assets', icon: '◧', permission: PERMISSIONS.ASSET_READ },
   { to: '/analytics', label: 'Analytics', shortLabel: 'Reports', icon: '◨', permission: PERMISSIONS.ANALYTICS_READ },
   { to: '/records', label: 'Records', shortLabel: 'Records', icon: '✓', permission: PERMISSIONS.SERVICE_READ },
-  { to: '/incidents', label: 'IT Helpdesk', shortLabel: 'Helpdesk', icon: '!', permission: PERMISSIONS.INCIDENT_READ },
-  { to: '/notices', label: 'Notices', shortLabel: 'Notices', icon: '📢', permission: PERMISSIONS.INCIDENT_READ },
+  { to: '/incidents', label: 'Incidents', shortLabel: 'Issues', icon: '!', permission: PERMISSIONS.INCIDENT_READ },
   { to: '/faq', label: 'Help', shortLabel: 'Help', icon: '?', permission: PERMISSIONS.FAQ_READ },
   { to: '/users', label: 'Users', shortLabel: 'Users', icon: '☰', permission: PERMISSIONS.USER_READ },
 ];
@@ -94,20 +93,18 @@ export default function Navbar() {
                 onClick={closeMenu}
                 aria-current={isActive ? 'page' : undefined}
               >
-                <span className="navbar__link-icon" aria-hidden="true">{item.icon}</span>
-                <span className="navbar__link-label">{item.label}</span>
+                {item.label}
               </Link>
             );
           })}
           <Link
-            className={`navbar__link${location.pathname === '/profile' ? ' navbar__link--active' : ''}`}
+            className={`navbar__avatar${location.pathname === '/profile' ? ' navbar__link--active' : ''}`}
             to="/profile"
             onClick={closeMenu}
             aria-label={`View profile for ${user?.username || 'user'}`}
             aria-current={location.pathname === '/profile' ? 'page' : undefined}
           >
-            <span className="navbar__link-icon" aria-hidden="true">{user?.username?.charAt(0).toUpperCase() || '?'}</span>
-            <span className="navbar__link-label">Profile</span>
+            <span aria-hidden="true">{user?.username?.charAt(0).toUpperCase() || '?'}</span>
           </Link>
         </nav>
       </div>

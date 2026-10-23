@@ -30,23 +30,13 @@ export default function ProtectedLayout() {
   return (
     <>
       <a className="skip-link" href="#main-content">Skip to main content</a>
+      <Navbar />
       <OfflineBanner />
-      <div className="app-shell">
-        <Navbar />
-        <main className="app-main" id="main-content" tabIndex="-1">
-          <Suspense fallback={<PageLoader label="Loading page..." />}>
-            <Outlet />
-          </Suspense>
-        </main>
-        <aside className="right-sidebar" aria-label="Sidebar">
-          <div className="sidebar-card">
-            <h2 className="sidebar-card__title">System status</h2>
-            <div className="sidebar-card__content">
-              <p className="text-muted">Maintenance, incidents and assets at a glance.</p>
-            </div>
-          </div>
-        </aside>
-      </div>
+      <main className="app-main" id="main-content" tabIndex="-1">
+        <Suspense fallback={<PageLoader label="Loading page..." />}>
+          <Outlet />
+        </Suspense>
+      </main>
       <BottomNav />
       <UpdatePrompt />
       <div className="watermark" aria-hidden="true" />
