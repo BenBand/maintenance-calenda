@@ -93,17 +93,18 @@ function validateStep(stepKey, form) {
   const nextErrors = {};
   if (stepKey === 'issue') {
     if (!form.title || !form.title.trim()) nextErrors.title = 'Title is required';
-    else if (form.title.length > 255) nextErrors.title = 'Title must be 255 characters or fewer';
+    else if (form.title.trim().length > 255) nextErrors.title = 'Title must be 255 characters or fewer';
     if (!form.description || !form.description.trim()) nextErrors.description = 'Description is required';
-    else if (form.description.length > 2000) nextErrors.description = 'Description must be 2000 characters or fewer';
+    else if (form.description.trim().length > 2000) nextErrors.description = 'Description must be 2000 characters or fewer';
   }
   if (stepKey === 'location') {
-    if (form.department && form.department.length > 255) nextErrors.department = 'Department must be 255 characters or fewer';
-    if (form.room && form.room.length > 255) nextErrors.room = 'Room must be 255 characters or fewer';
+    if (form.department && form.department.trim().length > 255) nextErrors.department = 'Department must be 255 characters or fewer';
+    if (form.room && form.room.trim().length > 255) nextErrors.room = 'Room must be 255 characters or fewer';
   }
   if (stepKey === 'asset') {
-    if (form.asset_identifier && form.asset_identifier.length > 255) nextErrors.asset_identifier = 'Asset identifier must be 255 characters or fewer';
-    if (form.asset_type && form.asset_type.length > 100) nextErrors.asset_type = 'Asset type must be 100 characters or fewer';
+    if (form.asset_identifier && form.asset_identifier.trim().length > 255) nextErrors.asset_identifier = 'Asset identifier must be 255 characters or fewer';
+    if (form.asset_type && form.asset_type.trim().length > 100) nextErrors.asset_type = 'Asset type must be 100 characters or fewer';
+    if (form.priority && !['low', 'medium', 'high', 'critical'].includes(form.priority)) nextErrors.priority = 'Invalid priority';
   }
   return nextErrors;
 }
@@ -213,9 +214,10 @@ export default function ReportIncidentForm({
       const errs = validateAll(form);
       setStepErrors(errs);
       if (Object.keys(errs).length > 0) {
-        if (errs.title || errs.description) setStepIndex(0);
-        else if (errs.department || errs.room) setStepIndex(1);
-        else if (errs.asset_identifier || errs.asset_type) setStepIndex(2);
+        const firstKey = Object.keys(errs)[0];
+        if (['title', 'description'].includes(firstKey)) setStepIndex(0);
+        else if (['department', 'room'].includes(firstKey)) setStepIndex(1);
+        else if (['asset_identifier', 'asset_type', 'priority'].includes(firstKey)) setStepIndex(2);
         return;
       }
     }
@@ -347,9 +349,9 @@ export default function ReportIncidentForm({
                 id={`${formId}-asset-type`}
                 type="text"
                 value={form.asset_type}
-                onChange={(event) => handleOtherChange('asset_type', event.target.value.slice(0, 255))}
+                onChange={(event) => handleOtherChange('asset_type', event.target.value.slice(0, 100))}
                 placeholder="Type the asset type"
-                maxLength={255}
+                maxLength={100}
                 aria-invalid={Boolean(effectiveErrors.asset_type)}
                 aria-describedby={describedBy('asset_type', effectiveErrors.asset_type)}
               />

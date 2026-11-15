@@ -31,27 +31,46 @@ export default function PublicReportPage() {
     setForm(prefill);
   }, [prefill]);
 
+  const handleChangeWrapped = (updater) => {
+    setErrors({});
+    setActionError('');
+    setForm(updater);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setActionError('');
+    setErrors({});
     setLoading(true);
     try {
       const response = await apiFetch('/public/incidents', {
         method: 'POST',
         body: JSON.stringify({
-          title: form.title,
-          description: form.description,
-          department: form.department || null,
-          room: form.room || null,
-          asset_type: form.asset_type || null,
-          asset_identifier: form.asset_identifier || null,
+          title: (form.title || '').trim(),
+          description: (form.description || '').trim(),
+          department: (form.department || '').trim() || null,
+          room: (form.room || '').trim() || null,
+          asset_type: (form.asset_type || '').trim() || null,
+          asset_identifier: (form.asset_identifier || '').trim() || null,
           priority: form.priority || 'medium',
         }),
       }, { skipAuth: true, skipRefresh: true, noQueue: true });
       const data = await readApiData(response);
       setSubmitted(data || { ok: true });
     } catch (err) {
-      setActionError(err?.message || 'Unable to submit report. Please try again.');
+      const details = err?.data?.details;
+      if (Array.isArray(details) && details.length > 0) {
+        const fieldErrors = {};
+        details.forEach((detail) => {
+          if (detail?.field && detail?.message && !fieldErrors[detail.field]) {
+            fieldErrors[detail.field] = detail.message;
+          }
+        });
+        setErrors(fieldErrors);
+        setActionError('Please fix the highlighted fields and try again.');
+      } else {
+        setActionError(err?.message || 'Unable to submit report. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -92,7 +111,7 @@ export default function PublicReportPage() {
           key={formKey}
           editingId={null}
           form={form}
-          setForm={setForm}
+          setForm={handleChangeWrapped}
           errors={errors}
           loading={loading}
           actionError={actionError}
