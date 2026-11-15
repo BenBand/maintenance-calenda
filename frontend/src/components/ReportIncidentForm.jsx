@@ -3,6 +3,19 @@ import { useEffect, useId, useMemo, useState } from 'react';
 const ASSET_TYPES = ['laptop', 'desktop', 'network_equipment', 'printer'];
 const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 const STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
+const DEFAULT_DEPARTMENTS = [
+  'Human Resource and Administration',
+  'Legal Services',
+  'Finance',
+  'Engineering Services',
+  'Housing and Social Services',
+  'City Planning',
+  'Public Health',
+  'Internal Audit',
+  'Public Relations',
+  'Procurement and Supplies',
+  'Information and Communication Technology',
+];
 
 const WIZARD_STEPS = [
   { key: 'issue', label: 'Issue', description: 'What is the problem?' },
@@ -121,10 +134,10 @@ export default function ReportIncidentForm({
   const [stepIndex, setStepIndex] = useState(0);
   const [stepErrors, setStepErrors] = useState({});
 
-  const departmentOptions = useMemo(
-    () => (departments || []).filter((name) => typeof name === 'string' && name.trim()),
-    [departments],
-  );
+  const departmentOptions = useMemo(() => {
+    const provided = (departments || []).filter((name) => typeof name === 'string' && name.trim());
+    return provided.length > 0 ? provided : DEFAULT_DEPARTMENTS;
+  }, [departments]);
 
   useEffect(() => {
     setOtherFields({
@@ -270,7 +283,7 @@ export default function ReportIncidentForm({
   const renderLocationStep = () => (
     <div className="form-row">
       <div className="form-field">
-        <label className="field-label" htmlFor={`${formId}-department`}>Department</label>
+        <label className="field-label" htmlFor={`${formId}-department`}>Department/Unit</label>
         {otherFields.department ? (
           <>
             <input
@@ -279,7 +292,7 @@ export default function ReportIncidentForm({
               type="text"
               value={form.department}
               onChange={(event) => handleOtherChange('department', event.target.value.slice(0, 255))}
-              placeholder="Type the department"
+              placeholder="Type the department/unit"
               maxLength={255}
               aria-invalid={Boolean(effectiveErrors.department)}
               aria-describedby={describedBy('department', effectiveErrors.department)}
@@ -297,7 +310,7 @@ export default function ReportIncidentForm({
             aria-invalid={Boolean(effectiveErrors.department)}
             aria-describedby={describedBy('department', effectiveErrors.department)}
           >
-            <option value="">Select department</option>
+            <option value="">Select department/unit</option>
             {departmentOptions.map((department) => <option key={department} value={department}>{department}</option>)}
             <option value="__other__">Other (specify)</option>
           </select>
@@ -400,7 +413,7 @@ export default function ReportIncidentForm({
       <dl className="report-review__list">
         <ReviewItem label="Title" value={form.title} />
         <ReviewItem label="Description" value={form.description} />
-        <ReviewItem label="Department" value={form.department} />
+        <ReviewItem label="Department/Unit" value={form.department} />
         <ReviewItem label="Room" value={form.room} />
         <ReviewItem label="Asset type" value={form.asset_type ? titleCase(form.asset_type) : ''} />
         <ReviewItem label="Asset identifier" value={form.asset_identifier} />
