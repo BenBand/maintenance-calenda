@@ -45,14 +45,6 @@ async function createIncident(req, res) {
   const locationDetails = cleanText(body.location_details, 2000);
   const contactPhone = cleanText(body.contact_phone, 50);
 
-  const fields = {};
-  if (!title) fields.title = 'Title is required';
-  if (!description) fields.description = 'Description is required';
-  if (Object.keys(fields).length > 0) {
-    const details = Object.entries(fields).map(([field, message]) => ({ field, message }));
-    return res.status(400).json({ error: details[0].message, message: details[0].message, fields, details });
-  }
-
   try {
     // Auto-assign SLA policy based on priority (non-fatal if SLA tables are missing).
     let slaPolicyId = null;

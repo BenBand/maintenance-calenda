@@ -486,10 +486,6 @@ export default function PublicReportPage() {
   };
 
   useEffect(() => {
-    setForm(prefill);
-  }, [prefill]);
-
-  useEffect(() => {
     loadStats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
