@@ -74,7 +74,7 @@ export default function PublicReportPage() {
     return (
       <main className="login-page" id="main-content" tabIndex="-1">
         <div className="watermark" aria-hidden="true" />
-        <section className="login-card" aria-labelledby="report-sent-title">
+        <section className="login-card login-card--wide" aria-labelledby="report-sent-title">
           <h1 className="login-title" id="report-sent-title">Report submitted</h1>
           <p className="login-subtitle">Your fault report has been received by the IT team.</p>
           {submitted.ticket_no && (

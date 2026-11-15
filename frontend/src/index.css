@@ -1254,6 +1254,11 @@ p {
   box-shadow: var(--shadow-lg);
 }
 
+.login-card--wide {
+  max-width: 960px;
+  padding: 36px 48px;
+}
+
 .login-title {
   margin-bottom: 8px;
   color: var(--text);
@@ -1600,6 +1605,11 @@ p {
 
   .login-card {
     padding: 24px;
+  }
+
+  .login-card--wide {
+    max-width: 100%;
+    padding: 20px;
   }
 
   .login-page {
