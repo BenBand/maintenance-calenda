@@ -425,7 +425,7 @@ export default function ReportIncidentForm({
           {allErrors.asset_type && <span className="error-text" id={errorId('asset_type')}>{allErrors.asset_type}</span>}
         </div>
         <div className="form-field">
-          <label className="field-label" htmlFor={`${formId}-asset-identifier`}>Asset Identifier</label>
+          <label className="field-label" htmlFor={`${formId}-asset-identifier`}>Asset Identifier/Model</label>
           <input
             className={`input${allErrors.asset_identifier ? ' input--error' : ''}`}
             id={`${formId}-asset-identifier`}

@@ -231,12 +231,12 @@ function createRequestContext(url, options, config, legacyToken, legacyCsrfToken
 }
 
 function applyAuthHeaders(context) {
-  if (context.config.skipAuth) return;
-  if (context.credentials.token) context.headers.set('Authorization', `Bearer ${context.credentials.token}`);
-  if (context.credentials.csrfToken) context.headers.set('X-CSRF-Token', context.credentials.csrfToken);
   if (context.options.body && !context.headers.has('Content-Type')) {
     context.headers.set('Content-Type', 'application/json');
   }
+  if (context.config.skipAuth) return;
+  if (context.credentials.token) context.headers.set('Authorization', `Bearer ${context.credentials.token}`);
+  if (context.credentials.csrfToken) context.headers.set('X-CSRF-Token', context.credentials.csrfToken);
 }
 
 function mergeInterceptorResult(context, result) {

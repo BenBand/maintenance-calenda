@@ -495,13 +495,13 @@ export default function PublicReportPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [submitted]);
 
-  const handleChangeWrapped = (updater) => {
+  const handleChangeWrapped = useCallback((updater) => {
     setErrors({});
     setActionError('');
     setForm(updater);
-  };
+  }, []);
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     setActionError('');
     setErrors({});
     setLoading(true);
@@ -543,7 +543,7 @@ export default function PublicReportPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [form]);
 
   if (submitted) {
     return (
