@@ -50,11 +50,11 @@ async function getPublicStats(req, res) {
         []
       ),
       safeRows(
-        `SELECT COALESCE(NULLIF(trim(ir.technician_name), ''), 'Unknown') AS technician,
-                round(avg(ir.rating)::numeric, 2) AS average_rating,
+        `SELECT COALESCE(NULLIF(trim(to_jsonb(ir)->>'technician_name'), ''), 'Unknown') AS technician,
+                round(avg((to_jsonb(ir)->>'rating')::numeric), 2) AS average_rating,
                 count(*)::int AS rating_count
          FROM incident_ratings ir
-         WHERE ir.rating IS NOT NULL
+         WHERE (to_jsonb(ir)->>'rating') ~ '^[0-9]+(\\.[0-9]+)?$'
          GROUP BY 1
          ORDER BY average_rating DESC, rating_count DESC, technician ASC`,
         [],

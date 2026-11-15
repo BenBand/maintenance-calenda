@@ -54,23 +54,26 @@ async function createIncident(req, res) {
   }
 
   try {
-    // Auto-assign SLA policy based on priority
-    const slaResult = await pool.query(
-      `SELECT id, response_time_minutes, resolution_time_minutes 
-       FROM sla_policies 
-       WHERE active = true AND (priority = $1 OR priority IS NULL) 
-       ORDER BY priority = $1 DESC LIMIT 1`,
-      [priority]
-    );
-
+    // Auto-assign SLA policy based on priority (non-fatal if SLA tables are missing).
     let slaPolicyId = null;
     let slaResponseDue = null;
     let slaResolutionDue = null;
-    if (slaResult.rows.length > 0) {
-      slaPolicyId = slaResult.rows[0].id;
-      const now = new Date();
-      slaResponseDue = new Date(now.getTime() + slaResult.rows[0].response_time_minutes * 60000);
-      slaResolutionDue = new Date(now.getTime() + slaResult.rows[0].resolution_time_minutes * 60000);
+    try {
+      const slaResult = await pool.query(
+        `SELECT id, response_time_minutes, resolution_time_minutes 
+         FROM sla_policies 
+         WHERE active = true AND (priority = $1 OR priority IS NULL) 
+         ORDER BY priority = $1 DESC LIMIT 1`,
+        [priority]
+      );
+      if (slaResult.rows.length > 0) {
+        slaPolicyId = slaResult.rows[0].id;
+        const now = new Date();
+        slaResponseDue = new Date(now.getTime() + slaResult.rows[0].response_time_minutes * 60000);
+        slaResolutionDue = new Date(now.getTime() + slaResult.rows[0].resolution_time_minutes * 60000);
+      }
+    } catch (slaError) {
+      console.warn('SLA lookup skipped:', slaError.message);
     }
 
     const result = await pool.query(
