@@ -18,14 +18,20 @@ const isOptional = { optional: { values: 'null' } };
 const USER_ROLES = ['admin', 'manager', 'developer', 'user'];
 
 function handleValidationErrors(req, res, next) {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      error: 'Validation failed',
-      details: errors.array().map((e) => ({ field: e.param, message: e.msg })),
-    });
+  const result = validationResult(req);
+  if (result.isEmpty()) return next();
+
+  const fields = {};
+  const details = [];
+  for (const err of result.array({ onlyFirstError: true })) {
+    const field = err.path || err.param || 'form';
+    if (!fields[field]) {
+      fields[field] = err.msg;
+      details.push({ field, message: err.msg });
+    }
   }
-  next();
+  const message = details[0]?.message || 'Please fix the highlighted fields and try again.';
+  return res.status(400).json({ error: message, message, fields, details });
 }
 
 const loginValidation = [
@@ -193,12 +199,12 @@ const incidentValidation = [
     .isLength({ min: 1, max: 2000 })
     .withMessage('Description is required and must be under 2000 characters'),
   body('department')
-    .optional({ values: 'null' })
+    .optional({ values: 'falsy' })
     .trim()
     .isLength({ max: 255 })
     .withMessage('Department must be under 255 characters'),
   body('room')
-    .optional({ values: 'null' })
+    .optional({ values: 'falsy' })
     .trim()
     .isLength({ max: 255 })
     .withMessage('Room must be under 255 characters'),
@@ -206,21 +212,21 @@ const incidentValidation = [
   // "Other (specify)" choice), so this is bounded by length rather than an enum.
   // Migration 000018 drops the matching database constraint.
   body('asset_type')
-    .optional({ values: 'null' })
+    .optional({ values: 'falsy' })
     .trim()
     .isLength({ max: 100 })
     .withMessage('Asset type must be under 100 characters'),
   body('asset_identifier')
-    .optional({ values: 'null' })
+    .optional({ values: 'falsy' })
     .trim()
     .isLength({ max: 255 })
     .withMessage('Asset identifier must be under 255 characters'),
   body('priority')
-    .optional({ values: 'null' })
+    .optional({ values: 'falsy' })
     .isIn(MAINTENANCE_PRIORITIES)
     .withMessage('Priority must be one of: ' + MAINTENANCE_PRIORITIES.join(', ')),
   body('status')
-    .optional({ values: 'null' })
+    .optional({ values: 'falsy' })
     .isIn(INCIDENT_STATUSES)
     .withMessage('Status must be one of: ' + INCIDENT_STATUSES.join(', ')),
   handleValidationErrors,

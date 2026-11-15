@@ -1799,3 +1799,124 @@ p {
     gap: 4px;
   }
 }
+
+.report-review__errors {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.inline-alert--success {
+  border-color: rgba(22, 163, 74, 0.35);
+  background: var(--success-soft);
+  color: #166534;
+}
+
+.public-stats {
+  margin-top: 20px;
+  display: grid;
+  gap: 16px;
+}
+
+.public-stats__charts,
+.public-stats__lists {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.simple-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.simple-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+@media (max-width: 800px) {
+  .public-stats__charts,
+  .public-stats__lists {
+    grid-template-columns: 1fr;
+  }
+
+  .simple-list__item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.public-tracker {
+  margin-top: 16px;
+}
+
+.tracker-lookup__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  margin-top: 6px;
+}
+
+.tracker-result {
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.tracker-result__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tracker-ticket {
+  margin: 0 0 4px;
+}
+
+.tracker-actions {
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.rating-input {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rating-star {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.rating-star--active {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #f59e0b;
+}
+
+@media (max-width: 800px) {
+  .tracker-lookup__row,
+  .tracker-result__head {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+}

@@ -55,6 +55,10 @@ function dedupe(list) {
   return [...new Set(list.filter(Boolean))];
 }
 
+function textValue(value) {
+  return typeof value === 'string' ? value : value == null ? '' : String(value);
+}
+
 export function suggestTitles({ assetType, priority, department, room, assetIdentifier, description }) {
   const asset = assetType ? titleCase(assetType) : 'Device';
   const where = room || department;
@@ -91,21 +95,32 @@ export function suggestDescriptions({ assetType, room, department, assetIdentifi
 
 function validateStep(stepKey, form) {
   const nextErrors = {};
+  const title = textValue(form.title).trim();
+  const description = textValue(form.description).trim();
+  const department = textValue(form.department);
+  const room = textValue(form.room);
+  const assetIdentifier = textValue(form.asset_identifier);
+  const assetType = textValue(form.asset_type);
+  const priority = textValue(form.priority);
+
   if (stepKey === 'issue') {
-    if (!form.title || !form.title.trim()) nextErrors.title = 'Title is required';
-    else if (form.title.trim().length > 255) nextErrors.title = 'Title must be 255 characters or fewer';
-    if (!form.description || !form.description.trim()) nextErrors.description = 'Description is required';
-    else if (form.description.trim().length > 2000) nextErrors.description = 'Description must be 2000 characters or fewer';
+    if (!title) nextErrors.title = 'Title is required';
+    else if (title.length > 255) nextErrors.title = 'Title must be 255 characters or fewer';
+    if (!description) nextErrors.description = 'Description is required';
+    else if (description.length > 2000) nextErrors.description = 'Description must be 2000 characters or fewer';
   }
+
   if (stepKey === 'location') {
-    if (form.department && form.department.trim().length > 255) nextErrors.department = 'Department must be 255 characters or fewer';
-    if (form.room && form.room.trim().length > 255) nextErrors.room = 'Room must be 255 characters or fewer';
+    if (department.trim().length > 255) nextErrors.department = 'Department must be 255 characters or fewer';
+    if (room.trim().length > 255) nextErrors.room = 'Room must be 255 characters or fewer';
   }
+
   if (stepKey === 'asset') {
-    if (form.asset_identifier && form.asset_identifier.trim().length > 255) nextErrors.asset_identifier = 'Asset identifier must be 255 characters or fewer';
-    if (form.asset_type && form.asset_type.trim().length > 100) nextErrors.asset_type = 'Asset type must be 100 characters or fewer';
-    if (form.priority && !['low', 'medium', 'high', 'critical'].includes(form.priority)) nextErrors.priority = 'Invalid priority';
+    if (assetIdentifier.trim().length > 255) nextErrors.asset_identifier = 'Asset identifier must be 255 characters or fewer';
+    if (assetType.trim().length > 100) nextErrors.asset_type = 'Asset type must be 100 characters or fewer';
+    if (priority && !PRIORITIES.includes(priority)) nextErrors.priority = 'Invalid priority';
   }
+
   return nextErrors;
 }
 
@@ -115,6 +130,19 @@ function validateAll(form) {
     ...validateStep('location', form),
     ...validateStep('asset', form),
   };
+}
+
+function stepForField(field) {
+  if (['title', 'description'].includes(field)) return 0;
+  if (['department', 'room'].includes(field)) return 1;
+  if (['asset_identifier', 'asset_type', 'priority', 'status'].includes(field)) return 2;
+  return 3;
+}
+
+function firstErrorStep(errors) {
+  const keys = Object.keys(errors || {}).filter((key) => errors[key]);
+  if (keys.length === 0) return null;
+  return stepForField(keys[0]);
 }
 
 function ReviewItem({ label, value }) {
@@ -133,7 +161,7 @@ export default function ReportIncidentForm({
   const formId = useId();
   const [otherFields, setOtherFields] = useState({ department: false, asset_type: false });
   const [stepIndex, setStepIndex] = useState(0);
-  const [stepErrors, setStepErrors] = useState({});
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const departmentOptions = useMemo(() => {
     const provided = (departments || []).filter((name) => typeof name === 'string' && name.trim());
@@ -149,26 +177,32 @@ export default function ReportIncidentForm({
   }, [editingId]);
 
   useEffect(() => {
-    if (!wizard) return;
-    const keys = Object.keys(errors || {}).filter((k) => errors[k]);
-    if (keys.length === 0) return;
-    const k = keys[0];
-    if (['title', 'description'].includes(k)) setStepIndex(0);
-    else if (['department', 'room'].includes(k)) setStepIndex(1);
-    else if (['asset_identifier', 'asset_type', 'priority', 'status'].includes(k)) setStepIndex(2);
+    const nextErrors = errors && typeof errors === 'object' ? errors : {};
+    setFieldErrors(nextErrors);
+    if (wizard) {
+      const nextStep = firstErrorStep(nextErrors);
+      if (nextStep !== null) setStepIndex(nextStep);
+    }
   }, [errors, wizard]);
 
-  const effectiveErrors = wizard ? { ...errors, ...stepErrors } : errors;
+  const clearFieldError = (field) => {
+    setFieldErrors((current) => {
+      if (!current?.[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  };
 
   const handleChange = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
-    if (wizard) setStepErrors((current) => ({ ...current, [field]: undefined }));
+    clearFieldError(field);
   };
 
   const handleOtherChange = (field, value) => {
     setOtherFields((current) => ({ ...current, [field]: true }));
     setForm((current) => ({ ...current, [field]: value }));
-    if (wizard) setStepErrors((current) => ({ ...current, [field]: undefined }));
+    clearFieldError(field);
   };
 
   const handleSelectChange = (field, value) => {
@@ -176,7 +210,7 @@ export default function ReportIncidentForm({
       const isOther = value === '__other__';
       setOtherFields((current) => ({ ...current, [field]: isOther }));
       setForm((current) => ({ ...current, [field]: '' }));
-      if (wizard) setStepErrors((current) => ({ ...current, [field]: undefined }));
+      clearFieldError(field);
       return;
     }
     const known = field === 'asset_type' ? ASSET_TYPES : departmentOptions;
@@ -187,7 +221,7 @@ export default function ReportIncidentForm({
       setOtherFields((current) => ({ ...current, [field]: true }));
       setForm((current) => ({ ...current, [field]: value }));
     }
-    if (wizard) setStepErrors((current) => ({ ...current, [field]: undefined }));
+    clearFieldError(field);
   };
 
   const titleSuggestions = useMemo(() => suggestTitles(form),
@@ -207,29 +241,41 @@ export default function ReportIncidentForm({
 
   const goNext = () => {
     const errs = validateStep(currentStep.key, form);
-    setStepErrors(errs);
-    if (Object.keys(errs).length === 0) setStepIndex((i) => Math.min(i + 1, WIZARD_STEPS.length - 1));
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors((current) => ({ ...current, ...errs }));
+      return;
+    }
+    setFieldErrors((current) => {
+      const next = { ...(current || {}) };
+      Object.keys(validateStep(currentStep.key, {})).forEach(() => {});
+      return next;
+    });
+    setStepIndex((i) => Math.min(i + 1, WIZARD_STEPS.length - 1));
   };
 
   const goBack = () => {
-    setStepErrors({});
     setStepIndex((i) => Math.max(i - 1, 0));
   };
 
   const handleSubmit = (event) => {
     event.preventDefault();
+
     if (wizard) {
-      const errs = validateAll(form);
-      setStepErrors(errs);
-      if (Object.keys(errs).length > 0) {
-        const firstKey = Object.keys(errs)[0];
-        if (['title', 'description'].includes(firstKey)) setStepIndex(0);
-        else if (['department', 'room'].includes(firstKey)) setStepIndex(1);
-        else if (['asset_identifier', 'asset_type', 'priority'].includes(firstKey)) setStepIndex(2);
+      if (stepIndex < WIZARD_STEPS.length - 1) {
+        goNext();
         return;
       }
+      const errs = validateAll(form);
+      if (Object.keys(errs).length > 0) {
+        setFieldErrors(errs);
+        const nextStep = firstErrorStep(errs);
+        if (nextStep !== null) setStepIndex(nextStep);
+        return;
+      }
+      setFieldErrors({});
     }
-    onSubmit(event);
+
+    if (typeof onSubmit === 'function') onSubmit(event);
   };
 
   const renderIssueStep = () => (
@@ -237,7 +283,7 @@ export default function ReportIncidentForm({
       <div className="form-field">
         <label className="field-label" htmlFor={`${formId}-title`}>Title *</label>
         <input
-          className={`input${effectiveErrors.title ? ' input--error' : ''}`}
+          className={`input${fieldErrors.title ? ' input--error' : ''}`}
           id={`${formId}-title`}
           type="text"
           value={form.title}
@@ -245,10 +291,10 @@ export default function ReportIncidentForm({
           placeholder="A short summary of the problem"
           maxLength={255}
           required
-          aria-invalid={Boolean(effectiveErrors.title)}
-          aria-describedby={describedBy('title', effectiveErrors.title)}
+          aria-invalid={Boolean(fieldErrors.title)}
+          aria-describedby={describedBy('title', fieldErrors.title)}
         />
-        {effectiveErrors.title && <span className="error-text" id={errorId('title')}>{effectiveErrors.title}</span>}
+        {fieldErrors.title && <span className="error-text" id={errorId('title')}>{fieldErrors.title}</span>}
         {titleSuggestions.length > 0 && (
           <div className="suggestion-row" aria-label="Suggested titles">
             <span className="suggestion-row__label">Suggestions</span>
@@ -264,7 +310,7 @@ export default function ReportIncidentForm({
       <div className="form-field">
         <label className="field-label" htmlFor={`${formId}-description`}>Description *</label>
         <textarea
-          className={`input${effectiveErrors.description ? ' input--error' : ''}`}
+          className={`input${fieldErrors.description ? ' input--error' : ''}`}
           id={`${formId}-description`}
           value={form.description}
           onChange={(event) => handleChange('description', event.target.value.slice(0, 2000))}
@@ -272,10 +318,10 @@ export default function ReportIncidentForm({
           rows={wizard ? 6 : 3}
           maxLength={2000}
           required
-          aria-invalid={Boolean(effectiveErrors.description)}
-          aria-describedby={describedBy('description', effectiveErrors.description)}
+          aria-invalid={Boolean(fieldErrors.description)}
+          aria-describedby={describedBy('description', fieldErrors.description)}
         />
-        {effectiveErrors.description && <span className="error-text" id={errorId('description')}>{effectiveErrors.description}</span>}
+        {fieldErrors.description && <span className="error-text" id={errorId('description')}>{fieldErrors.description}</span>}
         {descriptionSuggestions.length > 0 && (
           <div className="suggestion-row" aria-label="Suggested descriptions">
             <span className="suggestion-row__label">Suggestions</span>
@@ -297,15 +343,15 @@ export default function ReportIncidentForm({
         {otherFields.department ? (
           <>
             <input
-              className={`input${effectiveErrors.department ? ' input--error' : ''}`}
+              className={`input${fieldErrors.department ? ' input--error' : ''}`}
               id={`${formId}-department`}
               type="text"
               value={form.department}
               onChange={(event) => handleOtherChange('department', event.target.value.slice(0, 255))}
               placeholder="Type the department/unit"
               maxLength={255}
-              aria-invalid={Boolean(effectiveErrors.department)}
-              aria-describedby={describedBy('department', effectiveErrors.department)}
+              aria-invalid={Boolean(fieldErrors.department)}
+              aria-describedby={describedBy('department', fieldErrors.department)}
             />
             <button className="button button--secondary button--small" type="button" onClick={() => { setOtherFields((c) => ({ ...c, department: false })); handleChange('department', ''); }}>
               Choose from list
@@ -313,34 +359,34 @@ export default function ReportIncidentForm({
           </>
         ) : (
           <select
-            className={`input${effectiveErrors.department ? ' input--error' : ''}`}
+            className={`input${fieldErrors.department ? ' input--error' : ''}`}
             id={`${formId}-department`}
             value={departmentOptions.includes(form.department) ? form.department : ''}
             onChange={(event) => handleSelectChange('department', event.target.value)}
-            aria-invalid={Boolean(effectiveErrors.department)}
-            aria-describedby={describedBy('department', effectiveErrors.department)}
+            aria-invalid={Boolean(fieldErrors.department)}
+            aria-describedby={describedBy('department', fieldErrors.department)}
           >
             <option value="">Select department/unit</option>
             {departmentOptions.map((department) => <option key={department} value={department}>{department}</option>)}
             <option value="__other__">Other (specify)</option>
           </select>
         )}
-        {effectiveErrors.department && <span className="error-text" id={errorId('department')}>{effectiveErrors.department}</span>}
+        {fieldErrors.department && <span className="error-text" id={errorId('department')}>{fieldErrors.department}</span>}
       </div>
       <div className="form-field">
         <label className="field-label" htmlFor={`${formId}-room`}>Room</label>
         <input
-          className={`input${effectiveErrors.room ? ' input--error' : ''}`}
+          className={`input${fieldErrors.room ? ' input--error' : ''}`}
           id={`${formId}-room`}
           type="text"
           value={form.room}
           onChange={(event) => handleChange('room', event.target.value.slice(0, 255))}
           placeholder="Where the asset is"
           maxLength={255}
-          aria-invalid={Boolean(effectiveErrors.room)}
-          aria-describedby={describedBy('room', effectiveErrors.room)}
+          aria-invalid={Boolean(fieldErrors.room)}
+          aria-describedby={describedBy('room', fieldErrors.room)}
         />
-        {effectiveErrors.room && <span className="error-text" id={errorId('room')}>{effectiveErrors.room}</span>}
+        {fieldErrors.room && <span className="error-text" id={errorId('room')}>{fieldErrors.room}</span>}
       </div>
     </div>
   );
@@ -353,48 +399,48 @@ export default function ReportIncidentForm({
           {otherFields.asset_type ? (
             <>
               <input
-                className={`input${effectiveErrors.asset_type ? ' input--error' : ''}`}
+                className={`input${fieldErrors.asset_type ? ' input--error' : ''}`}
                 id={`${formId}-asset-type`}
                 type="text"
                 value={form.asset_type}
                 onChange={(event) => handleOtherChange('asset_type', event.target.value.slice(0, 100))}
                 placeholder="Type the asset type"
                 maxLength={100}
-                aria-invalid={Boolean(effectiveErrors.asset_type)}
-                aria-describedby={describedBy('asset_type', effectiveErrors.asset_type)}
+                aria-invalid={Boolean(fieldErrors.asset_type)}
+                aria-describedby={describedBy('asset_type', fieldErrors.asset_type)}
               />
               <span className="field-hint">Not in the list? Type it in.</span>
             </>
           ) : (
             <select
-              className={`input${effectiveErrors.asset_type ? ' input--error' : ''}`}
+              className={`input${fieldErrors.asset_type ? ' input--error' : ''}`}
               id={`${formId}-asset-type`}
               value={form.asset_type}
               onChange={(event) => handleSelectChange('asset_type', event.target.value)}
-              aria-invalid={Boolean(effectiveErrors.asset_type)}
-              aria-describedby={describedBy('asset_type', effectiveErrors.asset_type)}
+              aria-invalid={Boolean(fieldErrors.asset_type)}
+              aria-describedby={describedBy('asset_type', fieldErrors.asset_type)}
             >
               <option value="">None</option>
               {ASSET_TYPES.map((type) => <option key={type} value={type}>{titleCase(type)}</option>)}
               <option value="__other__">Other (specify)</option>
             </select>
           )}
-          {effectiveErrors.asset_type && <span className="error-text" id={errorId('asset_type')}>{effectiveErrors.asset_type}</span>}
+          {fieldErrors.asset_type && <span className="error-text" id={errorId('asset_type')}>{fieldErrors.asset_type}</span>}
         </div>
         <div className="form-field">
           <label className="field-label" htmlFor={`${formId}-asset-identifier`}>Asset Identifier</label>
           <input
-            className={`input${effectiveErrors.asset_identifier ? ' input--error' : ''}`}
+            className={`input${fieldErrors.asset_identifier ? ' input--error' : ''}`}
             id={`${formId}-asset-identifier`}
             type="text"
             value={form.asset_identifier}
             onChange={(event) => handleChange('asset_identifier', event.target.value.slice(0, 255))}
             placeholder="Serial/tag"
             maxLength={255}
-            aria-invalid={Boolean(effectiveErrors.asset_identifier)}
-            aria-describedby={describedBy('asset_identifier', effectiveErrors.asset_identifier)}
+            aria-invalid={Boolean(fieldErrors.asset_identifier)}
+            aria-describedby={describedBy('asset_identifier', fieldErrors.asset_identifier)}
           />
-          {effectiveErrors.asset_identifier && <span className="error-text" id={errorId('asset_identifier')}>{effectiveErrors.asset_identifier}</span>}
+          {fieldErrors.asset_identifier && <span className="error-text" id={errorId('asset_identifier')}>{fieldErrors.asset_identifier}</span>}
         </div>
       </div>
 
@@ -417,21 +463,36 @@ export default function ReportIncidentForm({
     </>
   );
 
-  const renderReviewStep = () => (
-    <div className="report-review">
-      <p className="field-hint">Check your details before submitting.</p>
-      <dl className="report-review__list">
-        <ReviewItem label="Title" value={form.title} />
-        <ReviewItem label="Description" value={form.description} />
-        <ReviewItem label="Department/Unit" value={form.department} />
-        <ReviewItem label="Room" value={form.room} />
-        <ReviewItem label="Asset type" value={form.asset_type ? titleCase(form.asset_type) : ''} />
-        <ReviewItem label="Asset identifier" value={form.asset_identifier} />
-        <ReviewItem label="Priority" value={form.priority ? titleCase(form.priority) : ''} />
-        {showStatus && <ReviewItem label="Status" value={form.status ? titleCase(form.status) : ''} />}
-      </dl>
-    </div>
-  );
+  const renderReviewStep = () => {
+    const reviewErrors = Object.values(fieldErrors || {}).filter(Boolean);
+    return (
+      <div className="report-review">
+        <p className="field-hint">Check your details before submitting.</p>
+        {reviewErrors.length > 0 && (
+          <div className="inline-alert" role="alert">
+            <div>
+              <strong>Please fix the highlighted fields and try again.</strong>
+              <ul className="report-review__errors">
+                {reviewErrors.map((message, index) => (
+                  <li key={`${index}-${message}`}>{message}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+        <dl className="report-review__list">
+          <ReviewItem label="Title" value={form.title} />
+          <ReviewItem label="Description" value={form.description} />
+          <ReviewItem label="Department/Unit" value={form.department} />
+          <ReviewItem label="Room" value={form.room} />
+          <ReviewItem label="Asset type" value={form.asset_type ? titleCase(form.asset_type) : ''} />
+          <ReviewItem label="Asset identifier" value={form.asset_identifier} />
+          <ReviewItem label="Priority" value={form.priority ? titleCase(form.priority) : ''} />
+          {showStatus && <ReviewItem label="Status" value={form.status ? titleCase(form.status) : ''} />}
+        </dl>
+      </div>
+    );
+  };
 
   const renderStepContent = () => {
     if (!wizard) {

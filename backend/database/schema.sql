@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   username VARCHAR(100) UNIQUE NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
-  role VARCHAR(50) DEFAULT 'user' CHECK (role IN ('admin', 'manager', 'developer', 'user')),
+  role VARCHAR(50) DEFAULT 'user' CHECK (role IN ('admin', 'developer')),
   refresh_token VARCHAR(500),
   refresh_token_expires_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -72,15 +72,38 @@ CREATE TABLE IF NOT EXISTS service_signatures (
 
 CREATE TABLE IF NOT EXISTS incidents (
   id SERIAL PRIMARY KEY,
+  ticket_no VARCHAR(20) UNIQUE,
   title VARCHAR(255) NOT NULL,
   description TEXT NOT NULL,
   department VARCHAR(255),
   room VARCHAR(255),
-  asset_type VARCHAR(100) CHECK (asset_type IN ('laptop', 'desktop', 'network_equipment', 'printer')),
+  asset_type VARCHAR(100),
   asset_identifier VARCHAR(255),
   priority VARCHAR(20) DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'critical')),
   status VARCHAR(30) DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
   reported_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  category VARCHAR(100),
+  sub_category VARCHAR(100),
+  directorate VARCHAR(255),
+  section VARCHAR(255),
+  ward VARCHAR(100),
+  location_details TEXT,
+  contact_phone VARCHAR(50),
+  assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  assigned_at TIMESTAMP,
+  acknowledged_at TIMESTAMP,
+  acknowledged_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  resolved_at TIMESTAMP,
+  closed_at TIMESTAMP,
+  escalation_reason TEXT,
+  escalated_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  escalated_at TIMESTAMP,
+  sla_policy_id INTEGER,
+  sla_response_due TIMESTAMP,
+  sla_resolution_due TIMESTAMP,
+  sla_breached BOOLEAN DEFAULT false,
+  resolution_notes TEXT,
+  kb_article_id INTEGER,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -96,6 +119,10 @@ CREATE TABLE IF NOT EXISTS incident_ratings (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (incident_id, rated_by)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_incident_ratings_incident_anonymous
+  ON incident_ratings(incident_id)
+  WHERE rated_by IS NULL;
 
 CREATE TABLE IF NOT EXISTS incident_comments (
   id SERIAL PRIMARY KEY,
@@ -185,6 +212,11 @@ CREATE INDEX IF NOT EXISTS idx_incidents_priority ON incidents(priority);
 CREATE INDEX IF NOT EXISTS idx_incidents_department ON incidents(department);
 CREATE INDEX IF NOT EXISTS idx_incidents_created_at ON incidents(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_incidents_reported_by ON incidents(reported_by);
+CREATE INDEX IF NOT EXISTS idx_incidents_ticket ON incidents(ticket_no);
+CREATE INDEX IF NOT EXISTS idx_incidents_assigned ON incidents(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_incidents_category ON incidents(category);
+CREATE INDEX IF NOT EXISTS idx_incidents_directorate ON incidents(directorate);
+CREATE INDEX IF NOT EXISTS idx_incidents_sla_breached ON incidents(sla_breached);
 
 CREATE INDEX IF NOT EXISTS idx_incident_ratings_incident ON incident_ratings(incident_id);
 CREATE INDEX IF NOT EXISTS idx_incident_ratings_rated_by ON incident_ratings(rated_by);

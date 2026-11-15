@@ -1,12 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const { createIncident } = require('../controllers/incidentController');
+const { createIncident, getPublicIncidentByTicket, confirmPublicIncidentFix } = require('../controllers/incidentController');
 const { getRatingsByIncident, upsertRating } = require('../controllers/ratingController');
+const { getPublicStats } = require('../controllers/publicController');
 const { incidentValidation, ratingValidation, incidentIdParamValidation } = require('../middleware/validate');
 const { publicReportLimiter } = require('../middleware/rateLimits');
 
 // Public, no-login fault reporting (e.g. QR code scans).
 router.post('/incidents', publicReportLimiter, incidentValidation, createIncident);
+router.get('/stats', publicReportLimiter, getPublicStats);
+router.get('/incidents/track/:ticketNo', publicReportLimiter, getPublicIncidentByTicket);
+router.post('/incidents/track/:ticketNo/confirm-fix', publicReportLimiter, confirmPublicIncidentFix);
 // Public rating/feedback for a resolved or closed incident (no account needed).
 router.get('/incidents/:incidentId/ratings', publicReportLimiter, incidentIdParamValidation, getRatingsByIncident);
 router.post('/incidents/:incidentId/ratings', publicReportLimiter, incidentIdParamValidation, ratingValidation, upsertRating);

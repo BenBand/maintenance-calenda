@@ -18,15 +18,41 @@ const INCIDENT_SELECT = `
   LEFT JOIN sla_policies s ON i.sla_policy_id = s.id
 `;
 
+function cleanText(value, max = 255) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  return text.slice(0, max);
+}
+
 async function createIncident(req, res) {
-  const { 
-    title, description, department, room, asset_type, asset_identifier, priority,
-    category, sub_category, directorate, section, ward, location_details, contact_phone
-  } = req.body;
+  const body = req.body || {};
   const userId = req.user?.id || null;
-  if (!title || !description) {
-    return res.status(400).json({ error: 'Title and description are required' });
+
+  const title = cleanText(body.title, 255);
+  const description = cleanText(body.description, 2000);
+  const department = cleanText(body.department, 255);
+  const room = cleanText(body.room, 255);
+  const assetType = cleanText(body.asset_type, 100);
+  const assetIdentifier = cleanText(body.asset_identifier, 255);
+  const allowedPriorities = ['low', 'medium', 'high', 'critical'];
+  const priority = allowedPriorities.includes(body.priority) ? body.priority : 'medium';
+  const category = cleanText(body.category, 100);
+  const subCategory = cleanText(body.sub_category, 100);
+  const directorate = cleanText(body.directorate, 255);
+  const section = cleanText(body.section, 255);
+  const ward = cleanText(body.ward, 100);
+  const locationDetails = cleanText(body.location_details, 2000);
+  const contactPhone = cleanText(body.contact_phone, 50);
+
+  const fields = {};
+  if (!title) fields.title = 'Title is required';
+  if (!description) fields.description = 'Description is required';
+  if (Object.keys(fields).length > 0) {
+    const details = Object.entries(fields).map(([field, message]) => ({ field, message }));
+    return res.status(400).json({ error: details[0].message, message: details[0].message, fields, details });
   }
+
   try {
     // Auto-assign SLA policy based on priority
     const slaResult = await pool.query(
@@ -34,9 +60,9 @@ async function createIncident(req, res) {
        FROM sla_policies 
        WHERE active = true AND (priority = $1 OR priority IS NULL) 
        ORDER BY priority = $1 DESC LIMIT 1`,
-      [priority || 'medium']
+      [priority]
     );
-    
+
     let slaPolicyId = null;
     let slaResponseDue = null;
     let slaResolutionDue = null;
@@ -46,7 +72,7 @@ async function createIncident(req, res) {
       slaResponseDue = new Date(now.getTime() + slaResult.rows[0].response_time_minutes * 60000);
       slaResolutionDue = new Date(now.getTime() + slaResult.rows[0].resolution_time_minutes * 60000);
     }
-    
+
     const result = await pool.query(
       `INSERT INTO incidents (
         title, description, department, room, asset_type, asset_identifier, priority, 
@@ -56,21 +82,23 @@ async function createIncident(req, res) {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) 
        RETURNING *`,
       [
-        title, description, department || null, room || null, asset_type || null, 
-        asset_identifier || null, priority || 'medium', userId,
-        category || null, sub_category || null, directorate || null, section || null, ward || null,
-        location_details || null, contact_phone || null, slaPolicyId, slaResponseDue, slaResolutionDue
+        title, description, department, room, assetType, assetIdentifier, priority,
+        userId, category, subCategory, directorate, section, ward,
+        locationDetails, contactPhone, slaPolicyId, slaResponseDue, slaResolutionDue
       ]
     );
     const incident = result.rows[0];
     await logMaintenanceAudit(req, userId ? 'CREATE_INCIDENT' : 'CREATE_INCIDENT_PUBLIC', 'incident', incident.id, { title, priority, ticket_no: incident.ticket_no, anonymous: !userId }, userId);
-    
+
     // Get enriched incident with ticket number
     const enriched = await pool.query(`${INCIDENT_SELECT} WHERE i.id = $1`, [incident.id]);
     res.status(201).json({ ...enriched.rows[0], rating_count: 0, average_rating: null });
   } catch (error) {
     console.error('Create incident error:', error);
-    res.status(500).json({ error: 'Failed to create incident' });
+    if (error && error.code === '23514') {
+      return res.status(400).json({ error: 'Some provided values are invalid. Please review the form and try again.', message: 'Some provided values are invalid. Please review the form and try again.', fields: {}, details: [] });
+    }
+    res.status(500).json({ error: 'Failed to create incident. Please try again.', message: 'Failed to create incident. Please try again.' });
   }
 }
 
@@ -312,7 +340,65 @@ async function assignIncident(req, res) {
   }
 }
 
+const PUBLIC_INCIDENT_SELECT = `
+  SELECT i.id, i.ticket_no, i.title, i.description, i.department, i.room, i.asset_type, i.asset_identifier,
+         i.priority, i.status, i.category, i.created_at, i.updated_at, i.acknowledged_at, i.resolved_at, i.closed_at,
+         i.resolution_notes, a.username as assigned_to_name,
+         (SELECT count(*) FROM incident_ratings ir WHERE ir.incident_id = i.id) AS rating_count,
+         (SELECT round(avg(ir.rating), 1) FROM incident_ratings ir WHERE ir.incident_id = i.id) AS average_rating
+  FROM incidents i
+  LEFT JOIN users a ON i.assigned_to = a.id
+`;
+
+async function getPublicIncidentByTicket(req, res) {
+  const { ticketNo } = req.params;
+  try {
+    const result = await pool.query(`${PUBLIC_INCIDENT_SELECT} WHERE i.ticket_no = $1`, [ticketNo]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Incident not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Get public incident error:', error);
+    res.status(500).json({ error: 'Failed to fetch incident' });
+  }
+}
+
+async function confirmPublicIncidentFix(req, res) {
+  const { ticketNo } = req.params;
+  try {
+    const existing = await pool.query(
+      'SELECT id, status, closed_at FROM incidents WHERE ticket_no = $1',
+      [ticketNo]
+    );
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Incident not found' });
+    }
+    const incident = existing.rows[0];
+    if (incident.status === 'closed') {
+      const enriched = await pool.query(`${PUBLIC_INCIDENT_SELECT} WHERE i.ticket_no = $1`, [ticketNo]);
+      return res.json({ ...enriched.rows[0], message: 'Fix already confirmed' });
+    }
+    if (incident.status !== 'resolved') {
+      return res.status(409).json({ error: 'You can confirm the fix only after the incident is marked resolved' });
+    }
+    await pool.query(
+      `UPDATE incidents
+       SET status = 'closed', closed_at = COALESCE(closed_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [incident.id]
+    );
+    await logMaintenanceAudit(req, 'CONFIRM_INCIDENT_FIX_PUBLIC', 'incident', incident.id, { ticket_no: ticketNo }, null);
+    const enriched = await pool.query(`${PUBLIC_INCIDENT_SELECT} WHERE i.ticket_no = $1`, [ticketNo]);
+    res.json(enriched.rows[0]);
+  } catch (error) {
+    console.error('Confirm public incident fix error:', error);
+    res.status(500).json({ error: 'Failed to confirm fix' });
+  }
+}
+
 module.exports = { 
   createIncident, getAllIncidents, getMyIncidents, getIncidentById, 
-  updateIncident, deleteIncident, acknowledgeIncident, assignIncident 
+  updateIncident, deleteIncident, acknowledgeIncident, assignIncident,
+  getPublicIncidentByTicket, confirmPublicIncidentFix,
 };
