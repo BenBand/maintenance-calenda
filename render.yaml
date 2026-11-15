@@ -7,7 +7,7 @@ services:
     buildCommand: |
       npm install
       cd frontend
-      npm install
+      npm install --include=dev
       npm run build
     startCommand: |
       npm install --prefix backend
