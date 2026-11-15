@@ -241,6 +241,10 @@ const ratingValidation = [
     .optional({ values: 'null' })
     .isInt({ min: 1, max: 5 })
     .withMessage('Rating must be an integer between 1 and 5'),
+  body('technician_name')
+    .trim()
+    .isLength({ min: 1, max: 255 })
+    .withMessage('Technician name is required'),
   body('feedback')
     .optional({ values: 'null' })
     .trim()

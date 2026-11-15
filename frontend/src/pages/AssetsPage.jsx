@@ -114,6 +114,34 @@ function AssetDetail({ assetId, assetTypes, canWrite, onChanged, onClose }) {
         )}
       </dl>
 
+      {(() => {
+        const params = new URLSearchParams();
+        if (asset.asset_identifier) params.set('asset_identifier', asset.asset_identifier);
+        if (asset.asset_type) params.set('asset_type', asset.asset_type);
+        if (asset.department) params.set('department', asset.department);
+        if (asset.room) params.set('room', asset.room);
+        const reportPath = `/report?${params.toString()}`;
+        const reportUrl = `${window.location.origin}${reportPath}`;
+        const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(reportUrl)}`;
+        return (
+          <section className="asset-detail__section" aria-label="QR fault reporting">
+            <h3 className="subsection__title">QR fault reporting</h3>
+            <p className="field-hint">Users can scan this code to report a fault for this asset without signing in.</p>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+              <img src={qrSrc} alt={`QR code to report a fault for ${asset.asset_identifier || 'this asset'}`} width="180" height="180" loading="lazy" />
+              <div style={{ minWidth: '220px', flex: 1 }}>
+                <label className="field-label" htmlFor={`report-link-${asset.id}`}>Direct report link</label>
+                <input id={`report-link-${asset.id}`} className="input" type="text" readOnly value={reportUrl} onFocus={(e) => e.target.select()} />
+                <div className="form-actions" style={{ marginTop: '0.5rem' }}>
+                  <button className="button button--secondary button--small" type="button" onClick={() => navigator.clipboard?.writeText(reportUrl)}>Copy link</button>
+                  <a className="button button--secondary button--small" href={qrSrc} target="_blank" rel="noreferrer" download={`qr-${asset.asset_identifier || asset.id}.png`}>Open QR</a>
+                </div>
+              </div>
+            </div>
+          </section>
+        );
+      })()}
+
       {asset.warranty_expiring_soon && (
         <div className="inline-alert inline-alert--warning" role="status">
           <span>Warranty expires on {String(asset.warranty_expiry).slice(0, 10)}</span>

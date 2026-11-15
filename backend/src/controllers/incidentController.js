@@ -23,7 +23,7 @@ async function createIncident(req, res) {
     title, description, department, room, asset_type, asset_identifier, priority,
     category, sub_category, directorate, section, ward, location_details, contact_phone
   } = req.body;
-  const userId = req.user.id;
+  const userId = req.user?.id || null;
   if (!title || !description) {
     return res.status(400).json({ error: 'Title and description are required' });
   }
@@ -63,7 +63,7 @@ async function createIncident(req, res) {
       ]
     );
     const incident = result.rows[0];
-    await logMaintenanceAudit(req, 'CREATE_INCIDENT', 'incident', incident.id, { title, priority, ticket_no: incident.ticket_no }, userId);
+    await logMaintenanceAudit(req, userId ? 'CREATE_INCIDENT' : 'CREATE_INCIDENT_PUBLIC', 'incident', incident.id, { title, priority, ticket_no: incident.ticket_no, anonymous: !userId }, userId);
     
     // Get enriched incident with ticket number
     const enriched = await pool.query(`${INCIDENT_SELECT} WHERE i.id = $1`, [incident.id]);

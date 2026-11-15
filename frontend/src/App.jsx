@@ -1,9 +1,10 @@
 import { lazy } from 'react';
-import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Login from './components/Login';
 import ProtectedLayout from './components/ProtectedLayout';
 import PermissionGate from './components/PermissionGate';
 import LandingRoute from './components/LandingRoute';
+import PublicReportPage from './pages/PublicReportPage';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const CalendarPage = lazy(() => import('./pages/CalendarPage'));
@@ -15,11 +16,20 @@ const AssetsPage = lazy(() => import('./pages/AssetsPage'));
 const Profile = lazy(() => import('./pages/Profile'));
 const FaqPage = lazy(() => import('./pages/FaqPage'));
 
+const STAFF_PORTAL_PATH = '/calender.portal';
+
+function LegacyLoginRedirect() {
+  return <Navigate to="/report" replace />;
+}
+
 export default function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/login" element={<Login />} />
+        {/* Staff (admin/developer/manager) sign-in lives at a separate, non-obvious URL. */}
+        <Route path={STAFF_PORTAL_PATH} element={<Login />} />
+        <Route path="/login" element={<LegacyLoginRedirect />} />
+        <Route path="/report" element={<PublicReportPage />} />
         <Route element={<ProtectedLayout />}>
           {/* A user's home is their incident history; staff land on the
               maintenance dashboard. Without this the requester would open the
@@ -65,5 +75,4 @@ export default function App() {
     </Router>
   );
 }
-import NoticesPage from './pages/NoticesPage';
 

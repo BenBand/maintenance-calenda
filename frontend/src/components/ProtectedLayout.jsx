@@ -18,14 +18,14 @@ export default function ProtectedLayout() {
         <section className="login-card" aria-labelledby="session-error-title">
           <h1 className="login-title" id="session-error-title">Session problem</h1>
           <div className="alert-error" role="alert">{sessionError}</div>
-          <button className="button button--primary button--wide" type="button" onClick={logout}>
-            Back to sign in
+          <button className="button button--primary button--wide" type="button" onClick={() => { logout(); window.location.assign('/report'); }}>
+            Back to report page
           </button>
         </section>
       </main>
     );
   }
-  if (!token) return <Navigate to="/login" replace />;
+  if (!token) return <Navigate to="/report" replace />;
 
   return (
     <>

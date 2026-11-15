@@ -19,6 +19,7 @@ const assetRoutes = require('./routes/assets');
 const analyticsRoutes = require('./routes/analytics');
 const downtimeRoutes = require('./routes/downtime');
 const faqRoutes = require('./routes/faq');
+const publicRoutes = require('./routes/public');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -34,7 +35,7 @@ app.use(
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'blob:'],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https://api.qrserver.com'],
         scriptSrc: ["'self'"],
         // The PWA service worker performs its own fetches (including the
         // offline API cache), so it needs an explicit worker-src and a
@@ -82,6 +83,7 @@ app.use('/api/assets', assetRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/downtime', downtimeRoutes);
 app.use('/api/faq', faqRoutes);
+app.use('/api/public', publicRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -123,7 +125,7 @@ startServer().catch((err) => {
   process.exit(1);
 });
 
-module.exports = app;
-
 const noticesRouter = require('./routes/notices');
 app.use('/api/notices', noticesRouter);
+
+module.exports = app;

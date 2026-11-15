@@ -26,7 +26,7 @@ export default function Profile() {
 
   const handleLogout = useCallback(() => {
     logout();
-    navigate('/login', { replace: true });
+    navigate('/report', { replace: true });
   }, [logout, navigate]);
 
   if (loading && !user) return <SkeletonPage label="Loading profile..." />;

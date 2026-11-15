@@ -47,8 +47,8 @@ async function getRatingsByIncident(req, res) {
 
 async function upsertRating(req, res) {
   const { incidentId } = req.params;
-  const { rating, feedback } = req.body;
-  const userId = req.user.id;
+  const { rating, feedback, technician_name } = req.body;
+  const userId = req.user?.id || null;
 
   if (rating === undefined || rating === null) {
     return res.status(400).json({ error: 'Rating is required' });
@@ -56,6 +56,10 @@ async function upsertRating(req, res) {
   const numericRating = Number(rating);
   if (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5) {
     return res.status(400).json({ error: 'Rating must be an integer between 1 and 5' });
+  }
+  const technicianName = typeof technician_name === 'string' ? technician_name.trim() : '';
+  if (!technicianName) {
+    return res.status(400).json({ error: 'Technician name is required' });
   }
   if (feedback !== undefined && feedback !== null && String(feedback).length > 2000) {
     return res.status(400).json({ error: 'Feedback must be 2000 characters or fewer' });
@@ -75,28 +79,36 @@ async function upsertRating(req, res) {
       });
     }
 
-    const existing = await pool.query(
-      'SELECT * FROM incident_ratings WHERE incident_id = $1 AND rated_by = $2',
-      [incidentId, userId]
-    );
+    let existing;
+    if (userId) {
+      existing = await pool.query(
+        'SELECT * FROM incident_ratings WHERE incident_id = $1 AND rated_by = $2',
+        [incidentId, userId]
+      );
+    } else {
+      existing = await pool.query(
+        'SELECT * FROM incident_ratings WHERE incident_id = $1 AND rated_by IS NULL ORDER BY created_at DESC LIMIT 1',
+        [incidentId]
+      );
+    }
 
     let record;
     if (existing.rows.length > 0) {
       const result = await pool.query(
-        `UPDATE incident_ratings SET rating = $1, feedback = $2, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $3 RETURNING *`,
-        [numericRating, feedback || null, existing.rows[0].id]
+        `UPDATE incident_ratings SET rating = $1, feedback = $2, technician_name = $3, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $4 RETURNING *`,
+        [numericRating, feedback || null, technicianName, existing.rows[0].id]
       );
       record = result.rows[0];
-      await logMaintenanceAudit(req, 'UPDATE_RATING', 'incident_rating', record.id, { incident_id: incidentId, rating: numericRating }, userId);
+      await logMaintenanceAudit(req, userId ? 'UPDATE_RATING' : 'UPDATE_RATING_PUBLIC', 'incident_rating', record.id, { incident_id: incidentId, rating: numericRating, technician_name: technicianName }, userId);
     } else {
       const result = await pool.query(
-        `INSERT INTO incident_ratings (incident_id, rated_by, rating, feedback)
-         VALUES ($1, $2, $3, $4) RETURNING *`,
-        [incidentId, userId, numericRating, feedback || null]
+        `INSERT INTO incident_ratings (incident_id, rated_by, rating, feedback, technician_name)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [incidentId, userId, numericRating, feedback || null, technicianName]
       );
       record = result.rows[0];
-      await logMaintenanceAudit(req, 'CREATE_RATING', 'incident_rating', record.id, { incident_id: incidentId, rating: numericRating }, userId);
+      await logMaintenanceAudit(req, userId ? 'CREATE_RATING' : 'CREATE_RATING_PUBLIC', 'incident_rating', record.id, { incident_id: incidentId, rating: numericRating, technician_name: technicianName }, userId);
     }
 
     const enriched = await pool.query(
@@ -107,7 +119,7 @@ async function upsertRating(req, res) {
     res.json(enriched.rows[0]);
   } catch (error) {
     if (error.code === '23505') {
-      return res.status(409).json({ error: 'You have already rated this incident' });
+      return res.status(409).json({ error: 'A rating for this incident has already been submitted' });
     }
     console.error('Upsert rating error:', error);
     res.status(500).json({ error: 'Failed to save rating' });

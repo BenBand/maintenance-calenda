@@ -10,8 +10,47 @@ import { EmptyState, ErrorState, SkeletonPage } from '../components/AsyncState';
 const ASSET_TYPES = ['laptop', 'desktop', 'network_equipment', 'printer'];
 const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 const STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
+const INCIDENT_STAGES = [
+  { key: 'open', label: 'Reported' },
+  { key: 'in_progress', label: 'In progress' },
+  { key: 'resolved', label: 'Resolved' },
+  { key: 'closed', label: 'Closed' },
+];
 // A fix can only be judged once the team has actually finished the work.
 const RATEABLE_STATUSES = ['resolved', 'closed'];
+// Sample technicians for attribution when users rate/feedback a completed fix.
+const TECHNICIANS = [
+  'John Mwale',
+  'Mary Banda',
+  'Peter Phiri',
+  'Grace Tembo',
+  'David Zulu',
+  'Chipo Lungu',
+];
+
+function incidentStageIndex(status) {
+  const index = INCIDENT_STAGES.findIndex((stage) => stage.key === status);
+  return index === -1 ? 0 : index;
+}
+
+function IncidentStages({ status, compact = false }) {
+  const current = incidentStageIndex(status);
+  return (
+    <div className={`incident-stages${compact ? ' incident-stages--compact' : ''}`}>
+      <ol className="incident-stages__track" aria-label={`Progress: ${STATUSES.includes(status) ? status.replace(/_/g, ' ') : 'reported'}`}>
+        {INCIDENT_STAGES.map((stage, index) => {
+          const state = index < current ? 'done' : index === current ? 'current' : 'todo';
+          return (
+            <li className={`incident-stages__step incident-stages__step--${state}`} key={stage.key}>
+              <span className="incident-stages__dot" aria-hidden="true" />
+              <span className="incident-stages__label">{stage.label}</span>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
 
 export default function IncidentsPage() {
   const { user, can } = useAuth();
@@ -36,6 +75,7 @@ export default function IncidentsPage() {
 
   const [ratingIncident, setRatingIncident] = useState(null);
   const [ratingValue, setRatingValue] = useState(0);
+  const [ratingTechnician, setRatingTechnician] = useState('');
   const [ratingFeedback, setRatingFeedback] = useState('');
   const [ratingError, setRatingError] = useState('');
   const [ratingSaving, setRatingSaving] = useState(false);
@@ -53,23 +93,29 @@ export default function IncidentsPage() {
   const [exportLoadingId, setExportLoadingId] = useState(null);
 
   const loadPage = useCallback(async () => {
-    // The `user` role only ever sees their own reports — the queue belongs to
-    // the IT team. Everyone else sees the full list.
+    const isAuthed = Boolean(user?.id);
     const isUserOnly = user?.role === 'user' && !canWriteIncidents;
-    // Both reads are issued together so the page renders in one round trip, but
-    // they must settle BEFORE readApiData sees them: it expects a Response, and
-    // handing it the pending promise throws on `response.headers.get`.
-    const [incidentsRes, departmentsRes] = await Promise.all([
-      isUserOnly ? apiFetch('/incidents/mine', {}) : apiFetch('/incidents', {}),
-      apiFetch('/maintenance/departments', {}),
-    ]);
-    const incidentsData = await readApiData(incidentsRes);
-    const departmentsData = await readApiData(departmentsRes);
-    return {
-      incidents: Array.isArray(incidentsData) ? incidentsData : [],
-      departments: Array.isArray(departmentsData) ? departmentsData : [],
-    };
-  }, [user?.role, canWriteIncidents]);
+    try {
+      if (!isAuthed) {
+        // Public/requester view: show incidents list for rating resolved items if available.
+        const incidentsRes = await apiFetch('/incidents', {}, { skipAuth: true, skipRefresh: true });
+        const incidentsData = await readApiData(incidentsRes).catch(() => null);
+        return { incidents: Array.isArray(incidentsData) ? incidentsData : [], departments: [] };
+      }
+      const [incidentsRes, departmentsRes] = await Promise.all([
+        isUserOnly ? apiFetch('/incidents/mine', {}) : apiFetch('/incidents', {}),
+        apiFetch('/maintenance/departments', {}).catch(() => null),
+      ]);
+      const incidentsData = await readApiData(incidentsRes);
+      const departmentsData = departmentsRes ? await readApiData(departmentsRes) : [];
+      return {
+        incidents: Array.isArray(incidentsData) ? incidentsData : [],
+        departments: Array.isArray(departmentsData) ? departmentsData : [],
+      };
+    } catch {
+      return { incidents: [], departments: [] };
+    }
+  }, [user?.id, user?.role, canWriteIncidents]);
 
   const { data, loading: pageLoading, error, reload } = useApiData(loadPage);
   const incidents = data?.incidents || [];
@@ -84,18 +130,23 @@ export default function IncidentsPage() {
   });
 
   // Ratings arrive with the incident row (count + average). The full list is
-  // fetched only when someone opens the rating dialog for that incident.
+  // fetched when opening the rating dialog (public endpoint for requester flow).
   const loadRatings = useCallback(async (incidentId) => {
-    if (!canReadRatings) return;
-    const response = await apiFetch(`/ratings/incident/${incidentId}`, {});
-    const payload = await readApiData(response);
-    setRatingsByIncident((current) => ({ ...current, [incidentId]: payload?.ratings || [] }));
+    try {
+      const path = canReadRatings ? `/ratings/incident/${incidentId}` : `/public/incidents/${incidentId}/ratings`;
+      const response = await apiFetch(path, {}, canReadRatings ? {} : { skipAuth: true, skipRefresh: true });
+      const payload = await readApiData(response);
+      setRatingsByIncident((current) => ({ ...current, [incidentId]: payload?.ratings || [] }));
+    } catch {
+      // ignore - rating dialog can still be submitted
+    }
   }, [canReadRatings]);
 
   const openRating = async (incident) => {
     setActionError('');
     setRatingError('');
     setRatingValue(0);
+    setRatingTechnician('');
     setRatingFeedback('');
     setRatingIncident(incident);
     await loadRatings(incident.id);
@@ -104,6 +155,7 @@ export default function IncidentsPage() {
   const closeRating = () => {
     setRatingIncident(null);
     setRatingValue(0);
+    setRatingTechnician('');
     setRatingFeedback('');
     setRatingError('');
   };
@@ -115,13 +167,18 @@ export default function IncidentsPage() {
       setRatingError('Choose a rating from 1 to 5 stars');
       return;
     }
+    if (!ratingTechnician) {
+      setRatingError('Select the technician who fixed the issue');
+      return;
+    }
     setRatingError('');
     setRatingSaving(true);
     try {
-      await apiFetch(`/ratings/incident/${ratingIncident.id}`, {
+      const path = canRate ? `/ratings/incident/${ratingIncident.id}` : `/public/incidents/${ratingIncident.id}/ratings`;
+      await apiFetch(path, {
         method: 'POST',
-        body: JSON.stringify({ rating: ratingValue, feedback: ratingFeedback || null }),
-      });
+        body: JSON.stringify({ rating: ratingValue, feedback: ratingFeedback || null, technician_name: ratingTechnician }),
+      }, canRate ? {} : { skipAuth: true, skipRefresh: true, noQueue: true });
       closeRating();
       await loadRatings(ratingIncident.id);
       await reload();
@@ -284,7 +341,7 @@ export default function IncidentsPage() {
 
   // The Discuss and Export actions are available to anyone who can read an
   // incident, so the column shows even for a role with no write access.
-  const showActions = canComment || canReadIncidents || canWriteIncidents || canDeleteIncidents || canRate;
+  const showActions = true;
   // Reported, Title, Description, Asset, Priority, Status, Reported By = 7,
   // plus Rating and Actions when those columns are rendered.
   const columnCount = 7 + (canReadRatings ? 1 : 0) + (showActions ? 1 : 0);
@@ -355,10 +412,13 @@ export default function IncidentsPage() {
                 <td data-label="Asset">{incident.asset_type ? incident.asset_type.replace(/_/g, ' ') : '-'}</td>
                 <td data-label="Priority"><span className={`badge badge--${incident.priority}`}>{incident.priority}</span></td>
                 <td data-label="Status">
-                  <label className="sr-only" htmlFor={`status-${incident.id}`}>Status for {incident.title}</label>
-                  <select className="status-select" id={`status-${incident.id}`} value={incident.status} onChange={(event) => handleQuickStatus(incident, event.target.value)} disabled={!canWriteIncidents || actionLoadingId === incident.id} aria-label={`Status for ${incident.title}`}>
-                    {STATUSES.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
-                  </select>
+                  <div className="incident-stamp">
+                    <IncidentStages status={incident.status} compact />
+                    <label className="sr-only" htmlFor={`status-${incident.id}`}>Status for {incident.title}</label>
+                    <select className="status-select" id={`status-${incident.id}`} value={incident.status} onChange={(event) => handleQuickStatus(incident, event.target.value)} disabled={!canWriteIncidents || actionLoadingId === incident.id} aria-label={`Status for ${incident.title}`}>
+                      {STATUSES.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
+                    </select>
+                  </div>
                 </td>
                 <td data-label="Reported by">{incident.reported_by_name || user?.username}</td>
                 {canReadRatings && (
@@ -371,9 +431,9 @@ export default function IncidentsPage() {
                 {showActions && (
                   <td data-label="Actions">
                     <div className="table-actions">
-                      {canRate && RATEABLE_STATUSES.includes(incident.status) && (
+                      {RATEABLE_STATUSES.includes(incident.status) && (
                         <button className="button button--secondary button--small" type="button" onClick={() => openRating(incident)} aria-label={`Rate service for incident ${incident.id}`}>
-                          {Number(incident.rating_count) > 0 ? 'Edit Rating' : 'Rate'}
+                          {Number(incident.rating_count) > 0 ? 'Rate / Feedback' : 'Rate'}
                         </button>
                       )}
                       <button className="button button--secondary button--small" type="button" onClick={() => openThread(incident)} aria-label={`Open discussion for incident ${incident.id}`}>
@@ -420,6 +480,23 @@ export default function IncidentsPage() {
             {ratingError && <div className="inline-alert" role="alert"><span>{ratingError}</span></div>}
 
             <div className="form-field">
+              <label className="field-label" htmlFor="rating-technician">Technician who fixed the issue *</label>
+              <select
+                className="input"
+                id="rating-technician"
+                value={ratingTechnician}
+                onChange={(event) => setRatingTechnician(event.target.value)}
+                required
+              >
+                <option value="">Select technician</option>
+                {TECHNICIANS.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              <p className="field-hint">Select the technician to help track work completed.</p>
+            </div>
+
+            <div className="form-field">
               <span className="field-label" id="rating-label">How was the fix for &ldquo;{ratingIncident.title}&rdquo;?</span>
               <div className="rating-input" role="radiogroup" aria-labelledby="rating-label">
                 {[1, 2, 3, 4, 5].map((value) => (
@@ -452,7 +529,7 @@ export default function IncidentsPage() {
               />
             </div>
 
-            {canReadRatings && ratingsByIncident[ratingIncident.id]?.length > 0 && (
+            {ratingsByIncident[ratingIncident.id]?.length > 0 && (
               <div className="form-field">
                 <span className="field-label">Previous ratings</span>
                 <ul className="rating-list">
@@ -462,7 +539,7 @@ export default function IncidentsPage() {
                         {'★'.repeat(rating.rating)}{'☆'.repeat(5 - rating.rating)}
                       </span>
                       <span className="rating-list__meta">
-                        {rating.rated_by_name || 'Unknown'} &middot; {rating.created_at?.split('T')[0] || '-'}
+                        {rating.technician_name ? `Technician: ${rating.technician_name} · ` : ''}{rating.rated_by_name || 'Reporter'} &middot; {rating.created_at?.split('T')[0] || '-'}
                       </span>
                       {rating.feedback && <span className="rating-list__comment">{rating.feedback}</span>}
                     </li>
@@ -484,6 +561,10 @@ export default function IncidentsPage() {
       {threadIncident && (
         <Modal title={`Discussion - ${threadIncident.title}`} onClose={closeThread}>
           <div className="form-stack">
+            <div className="section-block">
+              <h3 className="field-label">Progress stamp</h3>
+              <IncidentStages status={threadIncident.status} />
+            </div>
             {threadError && <div className="inline-alert" role="alert"><span>{threadError}</span></div>}
 
             <div className="thread" aria-busy={threadLoading}>

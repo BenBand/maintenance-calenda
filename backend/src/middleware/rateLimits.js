@@ -16,4 +16,12 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-module.exports = { loginLimiter, apiLimiter };
+const publicReportLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many reports submitted. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+module.exports = { loginLimiter, apiLimiter, publicReportLimiter };

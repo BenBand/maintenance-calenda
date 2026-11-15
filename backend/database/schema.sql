@@ -88,7 +88,8 @@ CREATE TABLE IF NOT EXISTS incidents (
 CREATE TABLE IF NOT EXISTS incident_ratings (
   id SERIAL PRIMARY KEY,
   incident_id INTEGER NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
-  rated_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  rated_by INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  technician_name VARCHAR(255),
   rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
   feedback TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

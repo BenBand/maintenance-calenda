@@ -242,35 +242,30 @@ export default function ReportIncidentForm({
           <label className="field-label" htmlFor={`${formId}-department`}>Department</label>
           {otherFields.department ? (
             <>
-            {departments && departments.length > 0 ? (
-              <select
-                className={fieldClass('department')}
+              <input
+                className={`input${errors.department ? ' input--error' : ''}`}
                 id={`${formId}-department`}
+                type="text"
                 value={form.department}
-                onChange={(e) => handleChange('department', e.target.value)}
+                onChange={(event) => handleOtherChange('department', event.target.value.slice(0, 255))}
+                placeholder="Type the department"
+                maxLength={255}
                 aria-invalid={Boolean(errors.department)}
+                aria-describedby={describedBy('department', errors.department)}
+              />
+              <button
+                className="button button--secondary button--small"
+                type="button"
+                onClick={() => { setOtherFields((c) => ({ ...c, department: false })); setForm((c) => ({ ...c, department: '' })); }}
               >
-                <option value="">Select department</option>
-                {departments.map((department) => <option key={department} value={department}>{department}</option>)}
-              </select>
-            ) : (
-            <select
-              className={fieldClass('asset_type')}
-              id={`${formId}-asset-type`}
-              value={form.asset_type}
-              onChange={(e) => handleChange('asset_type', e.target.value)}
-            >
-              <option value="">Select asset type</option>
-              {ASSET_TYPES.map((type) => <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>)}
-            </select>
-            )}
-              <span className="field-hint">Not in the list? Type it in.</span>
+                Choose from list
+              </button>
             </>
           ) : (
             <select
               className={`input${errors.department ? ' input--error' : ''}`}
               id={`${formId}-department`}
-              value={form.department}
+              value={departmentOptions.includes(form.department) ? form.department : ''}
               onChange={(event) => handleSelectChange('department', event.target.value)}
               aria-invalid={Boolean(errors.department)}
               aria-describedby={describedBy('department', errors.department)}
