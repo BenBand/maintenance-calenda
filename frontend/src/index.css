@@ -1655,3 +1655,172 @@ p {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Multi-step reporting wizard with side progress stamp */
+.report-wizard {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 24px;
+  margin-top: 8px;
+  align-items: start;
+}
+
+.report-wizard__progress {
+  position: sticky;
+  top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--surface-muted);
+}
+
+.report-wizard__stamp {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary-text);
+}
+
+.report-wizard__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.report-wizard__step {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+}
+
+.report-wizard__step--current {
+  background: var(--surface);
+  border-color: var(--border-soft);
+  box-shadow: var(--shadow);
+}
+
+.report-wizard__step-index {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.report-wizard__step--done .report-wizard__step-index {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+
+.report-wizard__step--current .report-wizard__step-index {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.report-wizard__step-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.report-wizard__step-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.report-wizard__step-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.report-wizard__step--todo .report-wizard__step-label,
+.report-wizard__step--todo .report-wizard__step-desc {
+  color: var(--text-muted);
+}
+
+.report-wizard__content {
+  min-width: 0;
+  padding: 4px 0;
+}
+
+.report-wizard__step-header {
+  margin-bottom: 4px;
+}
+
+.report-wizard__step-title {
+  margin: 0 0 2px;
+  font-size: 20px;
+  color: var(--text);
+}
+
+.report-review__list {
+  margin: 12px 0 0;
+  display: grid;
+  gap: 10px;
+}
+
+.report-review__item {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.report-review__label {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.report-review__value {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 800px) {
+  .report-wizard {
+    grid-template-columns: 1fr;
+  }
+
+  .report-wizard__progress {
+    position: static;
+  }
+
+  .report-wizard__steps {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .report-review__item {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

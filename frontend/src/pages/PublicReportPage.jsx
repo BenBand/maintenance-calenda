@@ -25,27 +25,14 @@ export default function PublicReportPage() {
   const [loading, setLoading] = useState(false);
   const [actionError, setActionError] = useState('');
   const [submitted, setSubmitted] = useState(null);
+  const [formKey, setFormKey] = useState(0);
 
   useEffect(() => {
     setForm(prefill);
   }, [prefill]);
 
-  const validate = () => {
-    const nextErrors = {};
-    if (!form.title || !form.title.trim()) nextErrors.title = 'Title is required';
-    else if (form.title.length > 255) nextErrors.title = 'Title must be 255 characters or fewer';
-    if (!form.description || !form.description.trim()) nextErrors.description = 'Description is required';
-    else if (form.description.length > 2000) nextErrors.description = 'Description must be 2000 characters or fewer';
-    if (form.room && form.room.length > 255) nextErrors.room = 'Room must be 255 characters or fewer';
-    if (form.asset_identifier && form.asset_identifier.length > 255) nextErrors.asset_identifier = 'Asset identifier must be 255 characters or fewer';
-    if (form.department && form.department.length > 255) nextErrors.department = 'Department must be 255 characters or fewer';
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
-
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!validate()) return;
     setActionError('');
     setLoading(true);
     try {
@@ -86,7 +73,7 @@ export default function PublicReportPage() {
             Keep the ticket number for reference. You can close this page.
           </p>
           <div className="form-actions" style={{ marginTop: '1rem' }}>
-            <button className="button button--primary" type="button" onClick={() => { setSubmitted(null); setForm(prefill); setErrors({}); setActionError(''); }}>
+            <button className="button button--primary" type="button" onClick={() => { setSubmitted(null); setForm(prefill); setErrors({}); setActionError(''); setFormKey((k) => k + 1); }}>
               Report another issue
             </button>
           </div>
@@ -100,8 +87,9 @@ export default function PublicReportPage() {
       <div className="watermark" aria-hidden="true" />
       <section className="login-card login-card--wide" aria-labelledby="report-title">
         <h1 className="login-title" id="report-title">Report a Fault</h1>
-        <p className="login-subtitle">No account needed. Fill in the details and submit.</p>
+        <p className="login-subtitle">No account needed. Complete each step to submit your report.</p>
         <ReportIncidentForm
+          key={formKey}
           editingId={null}
           form={form}
           setForm={setForm}
@@ -110,8 +98,9 @@ export default function PublicReportPage() {
           actionError={actionError}
           departments={[]}
           onSubmit={handleSubmit}
-          onClose={() => { setForm(prefill); setErrors({}); setActionError(''); }}
+          onClose={() => { setForm(prefill); setErrors({}); setActionError(''); setFormKey((k) => k + 1); }}
           canWriteIncidents={false}
+          wizard
         />
       </section>
     </main>
