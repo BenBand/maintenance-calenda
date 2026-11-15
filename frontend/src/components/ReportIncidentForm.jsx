@@ -149,8 +149,14 @@ export default function ReportIncidentForm({
   }, [editingId]);
 
   useEffect(() => {
-    if (wizard) setStepIndex(0);
-  }, [wizard, editingId]);
+    if (!wizard) return;
+    const keys = Object.keys(errors || {}).filter((k) => errors[k]);
+    if (keys.length === 0) return;
+    const k = keys[0];
+    if (['title', 'description'].includes(k)) setStepIndex(0);
+    else if (['department', 'room'].includes(k)) setStepIndex(1);
+    else if (['asset_identifier', 'asset_type', 'priority', 'status'].includes(k)) setStepIndex(2);
+  }, [errors, wizard]);
 
   const effectiveErrors = wizard ? { ...errors, ...stepErrors } : errors;
 
@@ -166,9 +172,11 @@ export default function ReportIncidentForm({
   };
 
   const handleSelectChange = (field, value) => {
-    if (value === '') {
-      setOtherFields((current) => ({ ...current, [field]: false }));
+    if (value === '' || value === '__other__') {
+      const isOther = value === '__other__';
+      setOtherFields((current) => ({ ...current, [field]: isOther }));
       setForm((current) => ({ ...current, [field]: '' }));
+      if (wizard) setStepErrors((current) => ({ ...current, [field]: undefined }));
       return;
     }
     const known = field === 'asset_type' ? ASSET_TYPES : departmentOptions;
