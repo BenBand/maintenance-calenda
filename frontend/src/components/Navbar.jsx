@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../services/auth';
 import { PERMISSIONS } from '../services/permissions';
-import { useTheme } from './ThemeProvider';
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', shortLabel: 'Home', icon: '.dk', permission: PERMISSIONS.MAINTENANCE_READ },
@@ -19,7 +18,6 @@ export { NAV_ITEMS };
 
 export default function Navbar() {
   const { user, can } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(null);
@@ -89,14 +87,6 @@ export default function Navbar() {
               </Link>
             );
           })}
-          <button
-            className="navbar__link navbar__theme-link"
-            type="button"
-            onClick={toggleTheme}
-            aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
-          >
-            {theme === 'light' ? 'Dark' : 'Light'}
-          </button>
           <Link
             className={`navbar__avatar${location.pathname === '/profile' ? ' navbar__link--active' : ''}`}
             to="/profile"

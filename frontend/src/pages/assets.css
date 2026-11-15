@@ -329,10 +329,6 @@
   cursor: pointer;
 }
 
-[data-theme='dark'] .link-button {
-  color: var(--primary);
-}
-
 .cell-subtitle {
   display: block;
   font-size: 0.75rem;
