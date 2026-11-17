@@ -34,25 +34,25 @@ services:
       - key: ADMIN_USERNAME
         value: admin
       - key: ADMIN_PASSWORD
-        generate: true
+        value: Admin@123
       - key: ADMIN_EMAIL
         value: admin@council.local
       - key: MANAGER_USERNAME
         value: manager
       - key: MANAGER_PASSWORD
-        generate: true
+        value: Manager@123
       - key: MANAGER_EMAIL
         value: manager@council.local
       - key: DEVELOPER_USERNAME
         value: developer
       - key: DEVELOPER_PASSWORD
-        generate: true
+        value: Developer@123
       - key: DEVELOPER_EMAIL
         value: developer@council.local
       - key: USER_USERNAME
         value: user
       - key: USER_PASSWORD
-        generate: true
+        value: User@123
       - key: USER_EMAIL
         value: user@council.local
       - key: CLIENT_ORIGIN
