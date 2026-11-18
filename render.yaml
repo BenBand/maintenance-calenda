@@ -12,7 +12,6 @@ services:
     startCommand: |
       npm install --prefix backend
       npm run migrate --prefix backend
-      npm run seed --prefix backend
       node backend/src/index.js
     envVars:
       - key: NODE_ENV
@@ -29,32 +28,6 @@ services:
         generate: true
       - key: DATABASE_URL
         database: maintenance_db
-      - key: SEED_EMAIL_DOMAIN
-        value: council.local
-      - key: ADMIN_USERNAME
-        value: admin
-      - key: ADMIN_PASSWORD
-        value: Admin@123
-      - key: ADMIN_EMAIL
-        value: admin@council.local
-      - key: MANAGER_USERNAME
-        value: manager
-      - key: MANAGER_PASSWORD
-        value: Manager@123
-      - key: MANAGER_EMAIL
-        value: manager@council.local
-      - key: DEVELOPER_USERNAME
-        value: developer
-      - key: DEVELOPER_PASSWORD
-        value: Developer@123
-      - key: DEVELOPER_EMAIL
-        value: developer@council.local
-      - key: USER_USERNAME
-        value: user
-      - key: USER_PASSWORD
-        value: User@123
-      - key: USER_EMAIL
-        value: user@council.local
       - key: CLIENT_ORIGIN
         sync: false
       - key: VITE_API_URL
