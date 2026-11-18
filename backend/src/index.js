@@ -27,7 +27,7 @@ const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN;
 
 const allowedOrigins = CLIENT_ORIGIN
   ? CLIENT_ORIGIN.split(',').map((o) => o.trim())
-  : ['https://maintenance-frontend-wwsg.onrender.com'];
+  : ['https://maintenance-fronend.onrender.com'];
 
 app.use(
   helmet({

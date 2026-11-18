@@ -10,6 +10,7 @@ services:
       npm install --include=dev
       npm run build
     startCommand: |
+      npm run build --prefix frontend
       npm install --prefix backend
       npm run migrate --prefix backend
       node backend/src/index.js
