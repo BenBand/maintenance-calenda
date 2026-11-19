@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Login from './components/Login';
+import Register from './components/Register';
 import ProtectedLayout from './components/ProtectedLayout';
 import PermissionGate from './components/PermissionGate';
 import LandingRoute from './components/LandingRoute';
@@ -22,6 +23,7 @@ function App() {
       <Routes>
         {/* Unified sign-in page - one URL for both admins and users */}
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
 
         <Route element={<ProtectedLayout />}>

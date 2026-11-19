@@ -1567,6 +1567,7 @@ p {
   }
 
   .stats-grid {
+    grid-template-columns: 1fr;
     gap: 10px;
   }
 
@@ -1576,6 +1577,14 @@ p {
 
   .stat-card__number {
     font-size: 26px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .form-actions .button {
+    width: 100%;
   }
 
   .login-card {

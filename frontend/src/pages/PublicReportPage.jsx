@@ -584,7 +584,6 @@ export default function PublicReportPage() {
       <div className="watermark" aria-hidden="true" />
       <section className="login-card login-card--wide" aria-labelledby="report-title">
         <h1 className="login-title" id="report-title">Report a Fault</h1>
-        <p className="login-subtitle">No account needed. Complete each step to submit your report.</p>
         <PublicIncidentTracker initialTicket="" />
         <ReportIncidentForm
           key={formKey}

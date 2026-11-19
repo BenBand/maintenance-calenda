@@ -137,7 +137,7 @@
 
 /* Every data table in the app becomes a card list on a phone. The label comes
    from each cell's data-label attribute, set by the pages. */
-@media (max-width: 700px) {
+@media (max-width: 800px) {
   .app-main {
     /* Clear the fixed tab bar so the last row is never hidden behind it. */
     padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
@@ -145,6 +145,15 @@
 
   .bottom-nav {
     display: flex;
+  }
+
+  /* Collapse the top nav to the hamburger when the tab bar takes over. */
+  .navbar__nav {
+    display: none;
+  }
+
+  .navbar__menu-button {
+    display: inline-flex;
   }
 
   .page-header {
@@ -228,5 +237,21 @@
 @media (max-width: 400px) {
   .bottom-nav__label {
     font-size: 10px;
+  }
+
+  /* The month grid is wider than a phone; let it scroll horizontally instead
+     of crushing the day cells or breaking the layout. */
+  .calendar__weekdays,
+  .calendar__grid {
+    min-width: auto;
+  }
+}
+
+/* Ensure the calendar slot list stays readable on narrow screens. */
+@media (max-width: 560px) {
+  .slot-card__time {
+    min-width: auto;
+    flex: 0 0 auto;
+    width: 5.5rem;
   }
 }

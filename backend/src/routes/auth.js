@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { login, refresh, me, logout, updateProfile } = require('../controllers/authController');
+const { login, register, refresh, me, logout, updateProfile } = require('../controllers/authController');
 const { authenticateToken } = require('../middleware/auth');
 const { csrfProtection } = require('../middleware/csrf');
 const { loginLimiter } = require('../middleware/rateLimits');
-const { loginValidation, profileUpdateValidation } = require('../middleware/validate');
+const { loginValidation, registerValidation, profileUpdateValidation } = require('../middleware/validate');
 
 router.post('/login', loginLimiter, loginValidation, login);
+router.post('/register', loginLimiter, registerValidation, register);
 router.post('/refresh', loginLimiter, refresh);
 // `/me` establishes *who the caller is*, so it is gated on authentication
 // alone. Gating it on a role permission is circular: a role the permission

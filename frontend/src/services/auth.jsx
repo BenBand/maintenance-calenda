@@ -122,13 +122,31 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  const register = async ({ fullName, email, password, confirmPassword }) => {
+    const response = await apiFetch('/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fullName, email, password, confirmPassword }),
+    }, { skipAuth: true, skipRefresh: true, maxRetries: 0 });
+    const data = await readResponseJson(response);
+
+    if (!response.ok) throw new Error(data?.error || 'Registration failed');
+    setSession({
+      token: data.token,
+      csrfToken: data.csrfToken,
+      refreshToken: data.refreshToken,
+    });
+    setUser(data.user);
+    return data;
+  };
+
   const can = useCallback(
     (permission) => hasPermission(user?.role, permission),
     [user?.role]
   );
 
   return (
-    <AuthContext.Provider value={{ token, csrfToken, refreshToken, user, login, logout, ready, can, sessionError }}>
+    <AuthContext.Provider value={{ token, csrfToken, refreshToken, user, login, register, logout, ready, can, sessionError }}>
       {children}
     </AuthContext.Provider>
   );

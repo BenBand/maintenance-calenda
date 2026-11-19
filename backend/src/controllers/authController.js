@@ -97,6 +97,54 @@ async function login(req, res) {
   }
 }
 
+async function register(req, res) {
+  const { fullName, email, password, confirmPassword } = req.body;
+  if (!fullName || !email || !password || !confirmPassword) {
+    return res.status(400).json({ error: 'All fields are required' });
+  }
+  if (password !== confirmPassword) {
+    return res.status(400).json({ error: 'Passwords do not match' });
+  }
+  try {
+    const existing = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    let username = String(fullName)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '')
+      .slice(0, 80) || email.split('@')[0];
+    let candidate = username;
+    let suffix = 1;
+    while (true) {
+      const taken = await pool.query('SELECT id FROM users WHERE username = $1', [candidate]);
+      if (taken.rows.length === 0) break;
+      candidate = `${username}${suffix}`;
+      suffix += 1;
+    }
+    username = candidate;
+
+    const passwordHash = await hashPassword(password);
+    const result = await pool.query(
+      `INSERT INTO users (username, email, password_hash, role)
+       VALUES ($1, $2, $3, 'user')
+       RETURNING id, username, email, role`,
+      [username, email, passwordHash]
+    );
+    const user = result.rows[0];
+
+    const session = await issueSession(req, user);
+    res.status(201).json(session);
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Server error during registration' });
+  }
+}
+
 async function refresh(req, res) {
   const refreshToken = req.body?.refreshToken;
   if (!refreshToken) {
@@ -220,4 +268,4 @@ async function updateProfile(req, res) {
   }
 }
 
-module.exports = { login, refresh, me, logout, updateProfile };
+module.exports = { login, register, refresh, me, logout, updateProfile };

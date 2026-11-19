@@ -45,6 +45,25 @@ const loginValidation = [
   handleValidationErrors,
 ];
 
+const registerValidation = [
+  body('fullName')
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Full name must be 2-100 characters'),
+  body('email')
+    .trim()
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('A valid email is required'),
+  body('password')
+    .isLength({ min: 8, max: 255 })
+    .withMessage('Password must be at least 8 characters'),
+  body('confirmPassword')
+    .custom((value, { req }) => value === req.body.password)
+    .withMessage('Passwords do not match'),
+  handleValidationErrors,
+];
+
 const profileUpdateValidation = [
   body('username')
     .optional({ values: 'null' })
@@ -376,6 +395,7 @@ const analyticsQueryValidation = [
 module.exports = {
   handleValidationErrors,
   loginValidation,
+  registerValidation,
   profileUpdateValidation,
   maintenanceScheduleValidation,
   serviceRecordValidation,

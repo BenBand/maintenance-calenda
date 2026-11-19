@@ -66,7 +66,7 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => caches.match(OFFLINE_FALLBACK).then((cached) => cached || caches.match('/')))
+        .catch(() => caches.match(OFFLINE_FALLBACK).then((cached) => cached || caches.match('/').then((fallback) => fallback || new Response(null, { status: 204 }))))
     );
     return;
   }

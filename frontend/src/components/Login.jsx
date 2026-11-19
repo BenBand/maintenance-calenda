@@ -77,6 +77,12 @@ export default function Login() {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+        <p className="login-subtitle" style={{ marginTop: 16, textAlign: 'center' }}>
+          Don't have an account?{' '}
+          <a href="/register" className="button button--secondary button--wide" style={{ textDecoration: 'none', display: 'block', textAlign: 'center' }}>
+            Create account
+          </a>
+        </p>
       </section>
     </main>
   );
