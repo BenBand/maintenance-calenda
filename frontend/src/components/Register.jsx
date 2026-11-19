@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../services/auth';
 import PasswordInput from '../components/PasswordInput';
 
@@ -116,9 +116,9 @@ export default function Register() {
         </form>
         <p className="login-subtitle" style={{ marginTop: 16, textAlign: 'center' }}>
           Already have an account?{' '}
-          <a href="/login" className="button button--secondary button--wide" style={{ textDecoration: 'none', display: 'block', textAlign: 'center' }}>
+          <Link to="/login" className="button button--secondary button--wide" style={{ textDecoration: 'none', display: 'block', textAlign: 'center' }}>
             Sign in
-          </a>
+          </Link>
         </p>
       </section>
     </main>
