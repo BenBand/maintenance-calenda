@@ -80,7 +80,7 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
         }
         return response;
-      });
+      }).catch(() => caches.match(OFFLINE_FALLBACK).then((cached) => cached || new Response(null, { status: 204 })));
     })
   );
 });
