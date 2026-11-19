@@ -16,63 +16,51 @@ const AssetsPage = lazy(() => import('./pages/AssetsPage'));
 const Profile = lazy(() => import('./pages/Profile'));
 const FaqPage = lazy(() => import('./pages/FaqPage'));
 
-const STAFF_PORTAL_PATH = '/calender.portal';
-
-function LegacyLoginRedirect() {
-  return <Navigate to="/report" replace />;
-}
-
-export default function App() {
+function App() {
   return (
     <Router>
       <Routes>
-        {/* Staff (admin/developer/manager) sign-in lives at a separate, non-obvious URL. */}
-        <Route path={STAFF_PORTAL_PATH} element={<Login />} />
-        <Route path="/login" element={<LegacyLoginRedirect />} />
-        <Route path="/report" element={<PublicReportPage />} />
+        {/* Unified sign-in page - one URL for both admins and users */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
+
         <Route element={<ProtectedLayout />}>
-          {/* A user's home is their incident history; staff land on the
-              maintenance dashboard. Without this the requester would open the
-              app straight onto schedules and service records they never asked
-              for. */}
-          <Route path="/" element={<LandingRoute />} />
-          <Route
-            path="/dashboard"
+          {/* Role-based home route - after login, users land based on their role */}
+          <Route path="/dashboard"
             element={<PermissionGate permission="maintenance:read"><Dashboard /></PermissionGate>}
           />
-          <Route
-            path="/calendar"
+          <Route path="/calendar"
             element={<PermissionGate permission="maintenance:read"><CalendarPage /></PermissionGate>}
           />
-          <Route
-            path="/records"
+          <Route path="/records"
             element={<PermissionGate permission="service:read"><RecordsPage /></PermissionGate>}
           />
-          <Route
-            path="/incidents"
+          <Route path="/incidents"
             element={<PermissionGate permission="incident:read"><IncidentsPage /></PermissionGate>}
           />
-          <Route
-            path="/assets"
+          <Route path="/assets"
             element={<PermissionGate permission="asset:read"><AssetsPage /></PermissionGate>}
           />
-          <Route
-            path="/analytics"
+          <Route path="/analytics"
             element={<PermissionGate permission="analytics:read"><AnalyticsPage /></PermissionGate>}
           />
-          <Route
-            path="/users"
+          <Route path="/users"
             element={<PermissionGate permission="user:read"><UsersPage /></PermissionGate>}
           />
-          <Route
-            path="/faq"
+          <Route path="/faq"
             element={<PermissionGate permission="faq:read"><FaqPage /></PermissionGate>}
           />
           <Route path="/profile" element={<Profile />} />
         </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
+
+        {/* Public incident reporting (no auth required) */}
+        <Route path="/report" element={<PublicReportPage />} />
+
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
   );
 }
+
+export default App;
 

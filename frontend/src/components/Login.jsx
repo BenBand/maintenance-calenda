@@ -4,7 +4,7 @@ import { useAuth } from '../services/auth';
 import PasswordInput from '../components/PasswordInput';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -30,7 +30,15 @@ export default function Login() {
     setLoading(true);
     try {
       await login(username, password);
-      navigate('/', { replace: true });
+      // Wait for state to update, then redirect based on role
+      queueMicrotask(() => {
+        const role = user?.role;
+        if (role === 'admin') {
+          navigate('/dashboard', { replace: true });
+        } else {
+          navigate('/report', { replace: true });
+        }
+      });
     } catch (err) {
       setError(err.message || 'Unable to sign in');
     } finally {

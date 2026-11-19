@@ -89,10 +89,6 @@ async function login(req, res) {
     if (!isValid) {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
-    if (normalizeRole(user.role) === 'user') {
-      return res.status(403).json({ error: 'This portal is for staff only. To report a fault, use the QR code or reporting page.' });
-    }
-
     const session = await issueSession(req, user);
     res.json(session);
   } catch (error) {

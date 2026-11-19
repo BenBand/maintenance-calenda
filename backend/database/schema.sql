@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   username VARCHAR(100) UNIQUE NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
-  role VARCHAR(50) DEFAULT 'user' CHECK (role IN ('admin', 'developer')),
+  role VARCHAR(50) DEFAULT 'user' CHECK (role IN ('admin', 'developer', 'manager', 'user')),
   refresh_token VARCHAR(500),
   refresh_token_expires_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
