@@ -66,7 +66,17 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => caches.match(OFFLINE_FALLBACK).then((cached) => cached || caches.match('/').then((fallback) => fallback || new Response(null, { status: 204 }))))
+        .catch(() =>
+          caches.match(OFFLINE_FALLBACK).then((cached) => {
+            if (cached) return cached;
+            // Ultimate fallback so a navigation never resolves to an empty
+            // response (which the browser treats as a network error).
+            return new Response(
+              '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Maintenance Calendar</title></head><body><div id="root"></div><script src="/index.html"></script></body></html>',
+              { status: 200, headers: { 'content-type': 'text/html' } },
+            );
+          })
+        )
     );
     return;
   }
