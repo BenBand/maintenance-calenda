@@ -7,6 +7,7 @@ import { useApiData } from '../hooks/useApiData';
 import MaintenanceForm from '../components/MaintenanceForm';
 import ServiceMaintenanceForm from '../components/ServiceMaintenanceForm';
 import Modal from '../components/Modal';
+import { Link } from 'react-router-dom';
 import { EmptyState, ErrorState, SkeletonPage } from '../components/AsyncState';
 import { formatSlotRange, formatMinutes } from '../utils/datetime';
 
@@ -176,15 +177,15 @@ export default function Dashboard() {
         <section className="section-block" aria-labelledby="quick-links-title">
           <h2 className="section-title" id="quick-links-title">Detailed Reporting</h2>
           <div className="quick-links">
-            <a className="quick-link" href="/analytics">
+            <Link className="quick-link" to="/analytics">
               <span className="quick-link__title">Analytics</span>
               <span className="quick-link__meta">Maintenance frequency, technician workload, overdue trend, time tracking, uptime</span>
-            </a>
+            </Link>
             {canReadAssets && (
-              <a className="quick-link" href="/assets">
+              <Link className="quick-link" to="/assets">
                 <span className="quick-link__title">Asset Registry</span>
                 <span className="quick-link__meta">Procurement to disposal, warranty and end-of-life tracking</span>
-              </a>
+              </Link>
             )}
           </div>
         </section>
