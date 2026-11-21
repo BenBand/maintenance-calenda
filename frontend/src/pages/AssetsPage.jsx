@@ -12,27 +12,20 @@ import './assets.css';
 
 const STATUS_TABS = [
   { value: '', label: 'All' },
-  { value: 'procurement', label: 'Procurement' },
-  { value: 'deployed', label: 'Deployed' },
+  { value: 'deployed', label: 'Working' },
   { value: 'in_service', label: 'In Service' },
   { value: 'maintenance', label: 'Maintenance' },
-  { value: 'retired', label: 'Retired' },
-  { value: 'disposed', label: 'Disposed' },
-];
-
-const WARRANTY_FILTERS = [
-  { value: '', label: 'Any warranty' },
-  { value: 'expiring', label: 'Expiring within 90 days' },
-  { value: 'expired', label: 'Expired' },
+  { value: 'retired', label: 'Not Working' },
+  { value: 'procurement', label: 'Procurement' },
 ];
 
 function statusBadgeClass(status) {
   const map = {
-    procurement: 'badge--neutral',
-    deployed: 'badge--info',
+    deployed: 'badge--status-completed',
     in_service: 'badge--status-completed',
     maintenance: 'badge--status-in_progress',
     retired: 'badge--status-overdue',
+    procurement: 'badge--neutral',
     disposed: 'badge--neutral',
   };
   return map[status] || 'badge--neutral';
@@ -259,7 +252,6 @@ export default function AssetsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
-  const [warrantyFilter, setWarrantyFilter] = useState('');
   const [page, setPage] = useState(1);
   const [selectedAssetId, setSelectedAssetId] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -272,7 +264,6 @@ export default function AssetsPage() {
     if (statusFilter) params.set('lifecycle_status', statusFilter);
     if (typeFilter) params.set('asset_type', typeFilter);
     if (departmentFilter) params.set('department', departmentFilter);
-    if (warrantyFilter) params.set('warranty_state', warrantyFilter);
     params.set('page', String(page));
     params.set('limit', '50');
     const query = params.toString();
@@ -351,30 +342,32 @@ export default function AssetsPage() {
 
       {stats && (
         <div className="stats-grid stats-grid--secondary" aria-label="Fleet summary">
-          <div className="stat-card stat-card--compact">
-            <div className="stat-card__number">{stats.total}</div>
-            <div className="stat-card__label">Total Assets</div>
-            <div className="stat-card__hint">{stats.procurement} in procurement</div>
-          </div>
           <div className="stat-card stat-card--compact stat-card--success">
-            <div className="stat-card__number">{stats.in_service + stats.deployed}</div>
-            <div className="stat-card__label">In Service</div>
-            <div className="stat-card__hint">avg age {stats.avg_age_years}y</div>
+            <div className="stat-card__number">{stats.working}</div>
+            <div className="stat-card__label">Total Working Assets</div>
+            <div className="stat-card__hint">{stats.total} registered in total</div>
+          </div>
+          <div className="stat-card stat-card--compact">
+            <div className="stat-card__label">By Asset Type</div>
+            <div style={{ display: 'grid', gap: 6 }}>
+              {data?.by_type?.map((type) => (
+                <div key={type.code} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', borderBottom: '1px solid var(--border-soft)', paddingBottom: 6 }}>
+                  <span className="stat-card__label">{humanizeKey(type.label)}</span>
+                  <span className="stat-card__number">{type.working}</span>
+                </div>
+              ))}
+              {(!data?.by_type || data.by_type.length === 0) && <span className="text-muted">No types registered</span>}
+            </div>
           </div>
           <div className="stat-card stat-card--compact stat-card--info">
             <div className="stat-card__number">{stats.maintenance}</div>
             <div className="stat-card__label">In Maintenance</div>
-            <div className="stat-card__hint">{stats.procurement} in procurement</div>
+            <div className="stat-card__hint">Being serviced right now</div>
           </div>
           <div className="stat-card stat-card--compact stat-card--danger">
-            <div className="stat-card__number">{stats.warranty_expiring}</div>
-            <div className="stat-card__label">Warranty Expiring</div>
-            <div className="stat-card__hint">{stats.warranty_expired} already expired</div>
-          </div>
-          <div className="stat-card stat-card--compact">
-            <div className="stat-card__number">{stats.end_of_life_soon}</div>
-            <div className="stat-card__label">End of Life</div>
-            <div className="stat-card__hint">within 180 days</div>
+            <div className="stat-card__number">{stats.end_of_life}</div>
+            <div className="stat-card__label">Not Working (End of Life)</div>
+            <div className="stat-card__hint">Retired assets</div>
           </div>
         </div>
       )}
@@ -421,12 +414,6 @@ export default function AssetsPage() {
             {departments.map((department) => <option key={department} value={department}>{department}</option>)}
           </select>
         </div>
-        <div className="filter-group">
-          <label className="sr-only" htmlFor="asset-warranty">Warranty</label>
-          <select className="input" id="asset-warranty" value={warrantyFilter} onChange={(e) => applyFilter(setWarrantyFilter)(e.target.value)}>
-            {WARRANTY_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </div>
       </div>
 
       <div className="assets-layout">
@@ -443,8 +430,7 @@ export default function AssetsPage() {
                     <th scope="col">Type</th>
                     <th scope="col">Department</th>
                     <th scope="col">Stage</th>
-                    <th scope="col">Warranty</th>
-                    <th scope="col">End of Life</th>
+                    <th scope="col">End of Life (Not Working)</th>
                     {canDelete && <th scope="col">Actions</th>}
                   </tr>
                 </thead>
@@ -464,15 +450,13 @@ export default function AssetsPage() {
                           {humanizeKey(asset.lifecycle_status)}
                         </span>
                       </td>
-                      <td data-label="Warranty">
-                        {asset.warranty_expiry ? (
-                          <span className={asset.warranty_expired ? 'value--negative' : asset.warranty_expiring_soon ? 'value--warning' : undefined}>
-                            {String(asset.warranty_expiry).slice(0, 10)}
-                            {asset.warranty_expired ? ' (expired)' : asset.warranty_expiring_soon ? ' (soon)' : ''}
-                          </span>
-                        ) : '—'}
+                      <td data-label="End of Life (Not Working)">
+                        {asset.lifecycle_status === 'retired'
+                          ? <span className="value--negative">Not Working</span>
+                          : asset.end_of_life_date
+                            ? String(asset.end_of_life_date).slice(0, 10)
+                            : '—'}
                       </td>
-                      <td data-label="End of Life">{asset.end_of_life_date ? String(asset.end_of_life_date).slice(0, 10) : '—'}</td>
                       {canDelete && (
                         <td data-label="Actions">
                           <button

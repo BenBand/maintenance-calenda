@@ -708,27 +708,20 @@ async function getAssetStats(req, res) {
     const result = await pool.query(
       `SELECT
           count(*)                                                             AS total,
-          count(*) FILTER (WHERE lifecycle_status = 'procurement')             AS procurement,
-          count(*) FILTER (WHERE lifecycle_status = 'deployed')                AS deployed,
-          count(*) FILTER (WHERE lifecycle_status = 'in_service')              AS in_service,
+          count(*) FILTER (WHERE lifecycle_status IN ('deployed','in_service')) AS working,
           count(*) FILTER (WHERE lifecycle_status = 'maintenance')             AS maintenance,
-          count(*) FILTER (WHERE lifecycle_status = 'retired')                 AS retired,
-          count(*) FILTER (WHERE lifecycle_status = 'disposed')                AS disposed,
-          count(*) FILTER (WHERE warranty_expiry < CURRENT_DATE)               AS warranty_expired,
-          count(*) FILTER (WHERE warranty_expiry >= CURRENT_DATE
-                             AND warranty_expiry <= CURRENT_DATE + 90)        AS warranty_expiring,
-          count(*) FILTER (WHERE end_of_life_date <= CURRENT_DATE + 180)      AS end_of_life_soon,
-          -- "date - date" already yields days, so EXTRACT(DAY FROM ...) would
-          -- have no interval operand to work with.
-          round(COALESCE(avg(CURRENT_DATE - purchase_date)
-            FILTER (WHERE purchase_date IS NOT NULL), 1), 1)                   AS avg_age_days
+          count(*) FILTER (WHERE lifecycle_status = 'retired')                 AS end_of_life,
+          count(*) FILTER (WHERE lifecycle_status = 'procurement')             AS procurement,
+          count(*) FILTER (WHERE lifecycle_status = 'disposed')                AS disposed
        FROM assets`
     );
 
     const byType = await pool.query(
       `SELECT t.code, t.label, t.sort_order,
               count(a.id)                                                     AS assets,
-              count(a.id) FILTER (WHERE a.lifecycle_status IN ('deployed','in_service')) AS in_service
+              count(a.id) FILTER (WHERE a.lifecycle_status IN ('deployed','in_service')) AS working,
+              count(a.id) FILTER (WHERE a.lifecycle_status = 'maintenance')   AS maintenance,
+              count(a.id) FILTER (WHERE a.lifecycle_status = 'retired')       AS end_of_life
        FROM asset_types t
        LEFT JOIN assets a ON a.asset_type = t.code
        GROUP BY t.code, t.label, t.sort_order
@@ -739,21 +732,18 @@ async function getAssetStats(req, res) {
     res.json({
       totals: {
         total: Number(stats.total),
-        procurement: Number(stats.procurement),
-        deployed: Number(stats.deployed),
-        in_service: Number(stats.in_service),
+        working: Number(stats.working),
         maintenance: Number(stats.maintenance),
-        retired: Number(stats.retired),
+        end_of_life: Number(stats.end_of_life),
+        procurement: Number(stats.procurement),
         disposed: Number(stats.disposed),
-        warranty_expired: Number(stats.warranty_expired),
-        warranty_expiring: Number(stats.warranty_expiring),
-        end_of_life_soon: Number(stats.end_of_life_soon),
-        avg_age_years: Number((Number(stats.avg_age_days) / 365).toFixed(1)),
       },
       by_type: byType.rows.map((row) => ({
         ...row,
         assets: Number(row.assets),
-        in_service: Number(row.in_service),
+        working: Number(row.working),
+        maintenance: Number(row.maintenance),
+        end_of_life: Number(row.end_of_life),
       })),
     });
   } catch (error) {
