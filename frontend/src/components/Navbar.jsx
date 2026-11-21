@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../services/auth';
 import { PERMISSIONS } from '../services/permissions';
+import NotificationBadge from './NotificationBadge';
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', shortLabel: 'Home', icon: '.dk', permission: PERMISSIONS.MAINTENANCE_READ },
@@ -59,6 +60,7 @@ export default function Navbar() {
               Install app
             </button>
           )}
+          <NotificationBadge />
           <button
             className="navbar__menu-button"
             type="button"

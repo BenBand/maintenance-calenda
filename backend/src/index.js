@@ -20,6 +20,7 @@ const analyticsRoutes = require('./routes/analytics');
 const downtimeRoutes = require('./routes/downtime');
 const faqRoutes = require('./routes/faq');
 const publicRoutes = require('./routes/public');
+const notificationsRoutes = require('./routes/notifications');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -84,6 +85,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/downtime', downtimeRoutes);
 app.use('/api/faq', faqRoutes);
 app.use('/api/public', publicRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

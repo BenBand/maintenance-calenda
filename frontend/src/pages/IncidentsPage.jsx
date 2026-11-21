@@ -5,6 +5,7 @@ import { apiFetch, downloadPdf, readApiData } from '../services/api';
 import { useApiData } from '../hooks/useApiData';
 import Modal from '../components/Modal';
 import ReportIncidentForm from '../components/ReportIncidentForm';
+import NotificationBadge from '../components/NotificationBadge';
 import { EmptyState, ErrorState, SkeletonPage } from '../components/AsyncState';
 
 const ASSET_TYPES = ['laptop', 'desktop', 'network_equipment', 'printer'];
@@ -16,9 +17,7 @@ const INCIDENT_STAGES = [
   { key: 'resolved', label: 'Resolved' },
   { key: 'closed', label: 'Closed' },
 ];
-// A fix can only be judged once the team has actually finished the work.
 const RATEABLE_STATUSES = ['resolved', 'closed'];
-// Sample technicians for attribution when users rate/feedback a completed fix.
 const TECHNICIANS = [
   'John Mwale',
   'Mary Banda',
@@ -37,7 +36,7 @@ function IncidentStages({ status, compact = false }) {
   const current = incidentStageIndex(status);
   return (
     <div className={`incident-stages${compact ? ' incident-stages--compact' : ''}`}>
-      <ol className="incident-stages__track" aria-label={`Progress: ${STATUSES.includes(status) ? status.replace(/_/g, ' ') : 'reported'}`}>
+      <ol className="incident-stages__track" aria-label={`Progress: ${status}`}>
         {INCIDENT_STAGES.map((stage, index) => {
           const state = index < current ? 'done' : index === current ? 'current' : 'todo';
           return (
@@ -54,8 +53,6 @@ function IncidentStages({ status, compact = false }) {
 
 export default function IncidentsPage() {
   const { user, can } = useAuth();
-  // Reporting is the `user` role's job. The IT roles respond and close, which
-  // is INCIDENT_WRITE, so they never see the Report button.
   const canReportIncident = can(PERMISSIONS.INCIDENT_CREATE);
   const canWriteIncidents = can(PERMISSIONS.INCIDENT_WRITE);
   const canDeleteIncidents = can(PERMISSIONS.INCIDENT_DELETE);
@@ -63,6 +60,8 @@ export default function IncidentsPage() {
   const canReadRatings = can(PERMISSIONS.RATING_READ);
   const canReadIncidents = can(PERMISSIONS.INCIDENT_READ);
   const canComment = can(PERMISSIONS.COMMENT_WRITE);
+  const isStaff = canWriteIncidents || user?.role === 'admin' || user?.role === 'manager' || user?.role === 'developer';
+  const isUserOnly = user?.role === 'user' && !canWriteIncidents;
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -81,9 +80,6 @@ export default function IncidentsPage() {
   const [ratingSaving, setRatingSaving] = useState(false);
   const [ratingsByIncident, setRatingsByIncident] = useState({});
 
-  // The comment thread is how the reporter and the IT team talk to each other
-  // while a fix is in progress, so it loads on demand for the open incident
-  // rather than for every row in the table.
   const [threadIncident, setThreadIncident] = useState(null);
   const [threadComments, setThreadComments] = useState([]);
   const [threadLoading, setThreadLoading] = useState(false);
@@ -92,22 +88,37 @@ export default function IncidentsPage() {
   const [commentSaving, setCommentSaving] = useState(false);
   const [exportLoadingId, setExportLoadingId] = useState(null);
 
+  const [technicians, setTechnicians] = useState([]);
+
   const loadPage = useCallback(async () => {
     const isAuthed = Boolean(user?.id);
-    const isUserOnly = user?.role === 'user' && !canWriteIncidents;
     try {
       if (!isAuthed) {
-        // Public/requester view: show incidents list for rating resolved items if available.
         const incidentsRes = await apiFetch('/incidents', {}, { skipAuth: true, skipRefresh: true });
         const incidentsData = await readApiData(incidentsRes).catch(() => null);
         return { incidents: Array.isArray(incidentsData) ? incidentsData : [], departments: [] };
       }
-      const [incidentsRes, departmentsRes] = await Promise.all([
-        isUserOnly ? apiFetch('/incidents/mine', {}) : apiFetch('/incidents', {}),
+
+      if (isUserOnly) {
+        const [incidentsRes, departmentsRes] = await Promise.all([
+          apiFetch('/incidents/mine', {}),
+          apiFetch('/maintenance/departments', {}).catch(() => null),
+        ]);
+        const incidentsData = await readApiData(incidentsRes);
+        const departmentsData = departmentsRes ? await readApiData(departmentsRes) : [];
+        return { incidents: Array.isArray(incidentsData) ? incidentsData : [], departments: Array.isArray(departmentsData) ? departmentsData : [] };
+      }
+
+      // Staff view: all incidents plus the technician list for assignment.
+      const [incidentsRes, departmentsRes, techsRes] = await Promise.all([
+        apiFetch('/incidents', {}),
         apiFetch('/maintenance/departments', {}).catch(() => null),
+        apiFetch('/users?role=developer', {}).catch(() => null),
       ]);
       const incidentsData = await readApiData(incidentsRes);
       const departmentsData = departmentsRes ? await readApiData(departmentsRes) : [];
+      const techsData = techsRes ? await readApiData(techsRes) : [];
+      setTechnicians(Array.isArray(techsData) ? techsData : []);
       return {
         incidents: Array.isArray(incidentsData) ? incidentsData : [],
         departments: Array.isArray(departmentsData) ? departmentsData : [],
@@ -129,8 +140,6 @@ export default function IncidentsPage() {
     return true;
   });
 
-  // Ratings arrive with the incident row (count + average). The full list is
-  // fetched when opening the rating dialog (public endpoint for requester flow).
   const loadRatings = useCallback(async (incidentId) => {
     try {
       const path = canReadRatings ? `/ratings/incident/${incidentId}` : `/public/incidents/${incidentId}/ratings`;
@@ -138,7 +147,7 @@ export default function IncidentsPage() {
       const payload = await readApiData(response);
       setRatingsByIncident((current) => ({ ...current, [incidentId]: payload?.ratings || [] }));
     } catch {
-      // ignore - rating dialog can still be submitted
+      // ignore
     }
   }, [canReadRatings]);
 
@@ -302,6 +311,13 @@ export default function IncidentsPage() {
     setShowForm(true);
   };
 
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm({ title: '', description: '', department: '', room: '', asset_type: '', asset_identifier: '', priority: 'medium', status: 'open' });
+    setErrors({});
+  };
+
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this incident?')) return;
     setActionError('');
@@ -329,31 +345,47 @@ export default function IncidentsPage() {
     }
   };
 
-  const closeForm = () => {
-    setShowForm(false);
-    setEditingId(null);
-    setForm({ title: '', description: '', department: '', room: '', asset_type: '', asset_identifier: '', priority: 'medium', status: 'open' });
-    setErrors({});
+  const handleAcknowledge = async (incident) => {
+    setActionError('');
+    setActionLoadingId(incident.id);
+    try {
+      await apiFetch(`/incidents/${incident.id}/acknowledge`, { method: 'POST' });
+      await reload();
+    } catch (err) {
+      setActionError(err.message || 'Unable to acknowledge incident');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleAssign = async (incident, assignedTo) => {
+    setActionError('');
+    setActionLoadingId(incident.id);
+    try {
+      await apiFetch(`/incidents/${incident.id}/assign`, { method: 'POST', body: JSON.stringify({ assigned_to: assignedTo }) });
+      await reload();
+    } catch (err) {
+      setActionError(err.message || 'Unable to assign incident');
+    } finally {
+      setActionLoadingId(null);
+    }
   };
 
   if (pageLoading && !data) return <SkeletonPage label="Loading incidents..." />;
   if (error && !data) return <ErrorState message={error} onRetry={reload} />;
 
-  // The Discuss and Export actions are available to anyone who can read an
-  // incident, so the column shows even for a role with no write access.
   const showActions = true;
-  // Reported, Title, Description, Asset, Priority, Status, Reported By = 7,
-  // plus Rating and Actions when those columns are rendered.
-  const columnCount = 7 + (canReadRatings ? 1 : 0) + (showActions ? 1 : 0);
+  const columnCount = 7 + (canReadRatings ? 1 : 0) + (showActions ? 1 : 0) + (isStaff ? 1 : 0);
 
   return (
     <div className="page page--wide" aria-busy={pageLoading}>
       <header className="page-header">
         <div>
-          <h1 className="page-title">Incidents</h1>
-          <p className="page-subtitle">Report an issue, follow its progress, and rate the fix</p>
+          <h1 className="page-title">{isStaff ? 'Incident Queue' : 'Incidents'}</h1>
+          <p className="page-subtitle">{isStaff ? 'All reports from users. Acknowledge, assign, and track resolution.' : 'Report an issue, follow its progress, and rate the fix'}</p>
+          <NotificationBadge />
         </div>
-        {canReportIncident && <button className="button button--primary" type="button" onClick={() => setShowForm(true)}>+ Report Incident</button>}
+        {canReportIncident && !isStaff && <button className="button button--primary" type="button" onClick={() => setShowForm(true)}>+ Report Incident</button>}
       </header>
 
       {(error || actionError) && <div className="inline-alert" role="alert"><span>{error || actionError}</span>{error && <button className="button button--secondary button--small" type="button" onClick={reload}>Retry</button>}</div>}
@@ -392,12 +424,13 @@ export default function IncidentsPage() {
           <caption className="sr-only">Reported issues and their progress</caption>
           <thead>
             <tr>
+              <th scope="col">Ticket</th>
               <th scope="col">Reported</th>
               <th scope="col">Title</th>
-              <th scope="col">Description</th>
               <th scope="col">Asset</th>
               <th scope="col">Priority</th>
               <th scope="col">Status</th>
+              {isStaff && <th scope="col">Assigned To</th>}
               <th scope="col">Reported By</th>
               {canReadRatings && <th scope="col">Rating</th>}
               {showActions && <th scope="col">Actions</th>}
@@ -406,20 +439,42 @@ export default function IncidentsPage() {
           <tbody>
             {filtered.map((incident) => (
               <tr key={incident.id}>
+                <td data-label="Ticket">{incident.ticket_no || `#${incident.id}`}</td>
                 <td data-label="Reported">{incident.created_at?.split('T')[0] || '-'}</td>
                 <td data-label="Title">{incident.title}</td>
-                <td data-label="Description">{incident.description?.substring(0, 60)}{incident.description?.length > 60 ? '...' : ''}</td>
                 <td data-label="Asset">{incident.asset_type ? incident.asset_type.replace(/_/g, ' ') : '-'}</td>
                 <td data-label="Priority"><span className={`badge badge--${incident.priority}`}>{incident.priority}</span></td>
                 <td data-label="Status">
                   <div className="incident-stamp">
                     <IncidentStages status={incident.status} compact />
-                    <label className="sr-only" htmlFor={`status-${incident.id}`}>Status for {incident.title}</label>
-                    <select className="status-select" id={`status-${incident.id}`} value={incident.status} onChange={(event) => handleQuickStatus(incident, event.target.value)} disabled={!canWriteIncidents || actionLoadingId === incident.id} aria-label={`Status for ${incident.title}`}>
-                      {STATUSES.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
-                    </select>
+                    {isStaff && (
+                      <select className="status-select" value={incident.status} onChange={(event) => handleQuickStatus(incident, event.target.value)} disabled={actionLoadingId === incident.id} aria-label={`Status for ${incident.title}`}>
+                        {STATUSES.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
+                      </select>
+                    )}
+                    {!isStaff && <span className={`badge badge--status-${incident.status}`}>{incident.status.charAt(0).toUpperCase() + incident.status.slice(1)}</span>}
                   </div>
                 </td>
+                {isStaff && (
+                  <td data-label="Assigned To">
+                    {incident.assigned_to_name ? (
+                      <span>{incident.assigned_to_name}</span>
+                    ) : (
+                      <select
+                        className="input status-select"
+                        value={incident.assigned_to || ''}
+                        onChange={(event) => handleAssign(incident, event.target.value)}
+                        disabled={actionLoadingId === incident.id}
+                        aria-label={`Assign technician for incident ${incident.id}`}
+                      >
+                        <option value="">Unassigned</option>
+                        {technicians.map((tech) => (
+                          <option key={tech.id} value={tech.id}>{tech.username}</option>
+                        ))}
+                      </select>
+                    )}
+                  </td>
+                )}
                 <td data-label="Reported by">{incident.reported_by_name || user?.username}</td>
                 {canReadRatings && (
                   <td data-label="Rating">
@@ -431,6 +486,11 @@ export default function IncidentsPage() {
                 {showActions && (
                   <td data-label="Actions">
                     <div className="table-actions">
+                      {isStaff && incident.status === 'open' && !incident.acknowledged_at && (
+                        <button className="button button--primary button--small" type="button" onClick={() => handleAcknowledge(incident)} disabled={actionLoadingId === incident.id} aria-label={`Acknowledge incident ${incident.id}`}>
+                          Acknowledge
+                        </button>
+                      )}
                       {RATEABLE_STATUSES.includes(incident.status) && (
                         <button className="button button--secondary button--small" type="button" onClick={() => openRating(incident)} aria-label={`Rate service for incident ${incident.id}`}>
                           {Number(incident.rating_count) > 0 ? 'Rate / Feedback' : 'Rate'}
@@ -454,8 +514,6 @@ export default function IncidentsPage() {
         </table>
       </div>
 
-      {/* `user` opens this to file a report; admin/manager open it to edit or
-          respond to one they are handling. */}
       {showForm && (canReportIncident || canWriteIncidents) && (
         <Modal title={editingId ? 'Edit Incident' : 'Report Incident'} onClose={closeForm}>
           <ReportIncidentForm
@@ -576,9 +634,6 @@ export default function IncidentsPage() {
               )}
               {!threadLoading && threadComments.map((comment) => {
                 const isOwn = String(comment.commented_by) === String(user?.id);
-                // Deleting is restricted to the comment's author, and the admin
-                // who can moderate the thread. A role with no COMMENT_WRITE can
-                // never have authored one, so it never sees this control.
                 const canDelete = canComment && (isOwn || user?.role === 'admin');
                 return (
                   <article className="thread__message" key={comment.id}>
@@ -597,9 +652,6 @@ export default function IncidentsPage() {
               })}
             </div>
 
-            {/* Only admin and developer hold COMMENT_WRITE. Everyone else can
-                still open the thread and read the replies, which is what
-                "receive feedback" means for the person who reported the issue. */}
             {canComment ? (
               <form className="form-stack" onSubmit={handleCommentSubmit} aria-busy={commentSaving}>
                 <div className="form-field">

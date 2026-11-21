@@ -1629,6 +1629,60 @@ p {
   }
 }
 
+.notification-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  margin-left: 6px;
+  animation: notificationPulse 2s infinite;
+}
+
+@keyframes notificationPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@media (max-width: 800px) {
+  .navbar__link {
+    position: relative;
+  }
+
+  .navbar__link .notification-badge {
+    position: absolute;
+    top: 6px;
+    right: 2px;
+    font-size: 10px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    margin-left: 0;
+  }
+
+  .bottom-nav__tab {
+    position: relative;
+  }
+
+  .bottom-nav__tab .notification-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 9px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    margin-left: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

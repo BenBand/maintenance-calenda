@@ -491,6 +491,82 @@ async function getTimeByDepartment(req, res) {
   }
 }
 
+async function getUserStats(req, res) {
+  const userId = req.user?.id;
+  const { from, to } = resolveRange(req.query);
+  const params = [userId, from.toISOString(), to.toISOString()];
+
+  try {
+    const [incidentStats, scheduleStats, serviceStats] = await Promise.all([
+      pool.query(
+        `SELECT
+            count(*)                                                    AS total_reports,
+            count(*) FILTER (WHERE status IN ('open','in_progress'))   AS open_reports,
+            count(*) FILTER (WHERE status IN ('resolved','closed'))    AS resolved_reports,
+            count(*) FILTER (WHERE priority = 'critical')              AS critical_reports,
+            count(*) FILTER (WHERE created_at >= $2::timestamptz)      AS reports_in_period
+         FROM incidents
+         WHERE reported_by = $1`,
+        params
+      ),
+      pool.query(
+        `SELECT
+            count(*)                                                    AS total_schedules,
+            count(*) FILTER (WHERE status = 'completed')               AS completed_schedules,
+            count(*) FILTER (WHERE status = 'in_progress')             AS in_progress_schedules,
+            count(*) FILTER (WHERE status = 'cancelled')               AS cancelled_schedules,
+            count(*) FILTER (WHERE status NOT IN ('completed','cancelled')
+                                   AND scheduled_at < now())           AS overdue_schedules,
+            count(*) FILTER (WHERE scheduled_at >= now()               AND scheduled_at <= now() + interval '7 days') AS due_next_7_days
+         FROM maintenance_schedules
+         WHERE created_by = $1`,
+        params
+      ),
+      pool.query(
+        `SELECT
+            count(*)                                                    AS total_services,
+            count(*) FILTER (WHERE created_at >= $2::timestamptz)      AS services_in_period,
+            COALESCE(sum(time_spent_minutes), 0)                       AS total_time_minutes
+         FROM service_records
+         WHERE created_by = $1`,
+        params
+      ),
+    ]);
+
+    const incidents = incidentStats.rows[0];
+    const schedules = scheduleStats.rows[0];
+    const services = serviceStats.rows[0];
+
+    res.json({
+      range: { from: from.toISOString(), to: to.toISOString() },
+      reports: {
+        total: Number(incidents.total_reports),
+        open: Number(incidents.open_reports),
+        resolved: Number(incidents.resolved_reports),
+        critical: Number(incidents.critical_reports),
+        in_period: Number(incidents.reports_in_period),
+      },
+      schedules: {
+        total: Number(schedules.total_schedules),
+        completed: Number(schedules.completed_schedules),
+        in_progress: Number(schedules.in_progress_schedules),
+        cancelled: Number(schedules.cancelled_schedules),
+        overdue: Number(schedules.overdue_schedules),
+        due_next_7_days: Number(schedules.due_next_7_days),
+      },
+      services: {
+        total: Number(services.total_services),
+        in_period: Number(services.services_in_period),
+        total_time_minutes: Number(services.total_time_minutes),
+        total_time_hours: Number((services.total_time_minutes / 60).toFixed(1)),
+      },
+    });
+  } catch (error) {
+    console.error('User stats error:', error);
+    res.status(500).json({ error: 'Failed to build user statistics' });
+  }
+}
+
 async function getUptimeStats(req, res) {
   const { from, to, preset, timezone } = resolveRange(req.query, { defaultPreset: '30d' });
   const periodMinutes = (Date.parse(to.toISOString()) - Date.parse(from.toISOString())) / 60000;
@@ -686,4 +762,5 @@ module.exports = {
   getOverdueTrend,
   getTimeByDepartment,
   getUptimeStats,
+  getUserStats,
 };

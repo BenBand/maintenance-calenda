@@ -12,6 +12,37 @@ const PROFILE_FIELDS = [
   { label: 'Role', value: (user) => user.role.charAt(0).toUpperCase() + user.role.slice(1) },
 ];
 
+const STAT_GROUPS = [
+  {
+    title: 'Reports',
+    items: [
+      { label: 'Total reports', key: 'total' },
+      { label: 'Open', key: 'open' },
+      { label: 'Resolved', key: 'resolved' },
+      { label: 'Critical', key: 'critical' },
+      { label: 'In this period', key: 'in_period' },
+    ],
+  },
+  {
+    title: 'Maintenance schedules',
+    items: [
+      { label: 'Total', key: 'total' },
+      { label: 'Completed', key: 'completed' },
+      { label: 'In progress', key: 'in_progress' },
+      { label: 'Overdue', key: 'overdue' },
+      { label: 'Due next 7 days', key: 'due_next_7_days' },
+    ],
+  },
+  {
+    title: 'Service records',
+    items: [
+      { label: 'Total', key: 'total' },
+      { label: 'In this period', key: 'in_period' },
+      { label: 'Time spent (hrs)', key: 'total_time_hours' },
+    ],
+  },
+];
+
 export default function Profile() {
   const { can, logout } = useAuth();
   const navigate = useNavigate();
@@ -22,15 +53,21 @@ export default function Profile() {
     return readApiData(response);
   }, []);
 
-  const { data: user, loading, error, reload } = useApiData(loadProfile);
+  const loadStats = useCallback(async () => {
+    const response = await apiFetch('/analytics/user-stats', {});
+    return readApiData(response);
+  }, []);
+
+  const { data: user, loading: loadingUser, error: errorUser, reload: reloadUser } = useApiData(loadProfile);
+  const { data: stats, loading: loadingStats, error: errorStats, reload: reloadStats } = useApiData(loadStats);
 
   const handleLogout = useCallback(() => {
     logout();
     navigate('/report', { replace: true });
   }, [logout, navigate]);
 
-  if (loading && !user) return <SkeletonPage label="Loading profile..." />;
-  if (error && !user) return <ErrorState message={error} onRetry={reload} />;
+  if ((loadingUser || loadingStats) && !user) return <SkeletonPage label="Loading profile..." />;
+  if ((errorUser || errorStats) && !user) return <ErrorState message={errorUser || errorStats} onRetry={() => { reloadUser(); reloadStats(); }} />;
 
   return (
     <div className="page page--narrow" aria-busy={loading}>
@@ -41,7 +78,7 @@ export default function Profile() {
         </div>
       </header>
 
-      {error && <div className="inline-alert" role="alert"><span>{error}</span><button className="button button--secondary button--small" type="button" onClick={reload}>Retry</button></div>}
+      {errorUser && <div className="inline-alert" role="alert"><span>{errorUser}</span><button className="button button--secondary button--small" type="button" onClick={reloadUser}>Retry</button></div>}
 
       <div className="profile-wrapper">
         <section className="profile-card" aria-labelledby="profile-title">
@@ -72,6 +109,37 @@ export default function Profile() {
             </Link>
           </div>
         </section>
+
+        {stats && (
+          <section className="profile-card" aria-labelledby="user-stats-title">
+            <h2 className="sr-only" id="user-stats-title">Your statistics</h2>
+            <header className="profile-header">
+              <h3 id="user-stats-title">Your statistics</h3>
+              <p className="profile-role">Your activity across the system</p>
+            </header>
+            <div className="stats-grid" role="list" aria-label="User activity summary">
+              {STAT_GROUPS.map((group) => (
+                <div key={group.title} className="stat-card">
+                  <h4 className="stat-card__label" style={{ fontSize: '15px', marginBottom: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
+                    {group.title}
+                  </h4>
+                  <dl style={{ margin: 0, padding: 0, display: 'grid', gap: 6 }}>
+                    {group.items.map((item) => {
+                      let value = stats[group.title.toLowerCase()]?.[item.key];
+                      if (item.key === 'total_time_hours' && value != null) value = value.toFixed(1);
+                      return (
+                        <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-soft)', paddingBottom: 6, marginBottom: 6 }}>
+                          <span className="profile-label" style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>{item.label}</span>
+                          <span className="profile-value" style={{ fontSize: '13px', color: 'var(--text)', fontWeight: 600 }}>{value != null ? value : '-'}</span>
+                        </div>
+                      );
+                    })}
+                  </dl>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

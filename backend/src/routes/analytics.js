@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   getOverview, getMaintenanceFrequency, getTechnicianWorkload,
-  getOverdueTrend, getTimeByDepartment, getUptimeStats,
+  getOverdueTrend, getTimeByDepartment, getUptimeStats, getUserStats,
 } = require('../controllers/analyticsController');
 const { authenticateToken, requirePermission } = require('../middleware/auth');
 const { csrfProtection } = require('../middleware/csrf');
@@ -16,5 +16,8 @@ router.get('/technician-workload', requirePermission('analytics:read'), analytic
 router.get('/overdue-trend', requirePermission('analytics:read'), analyticsQueryValidation, getOverdueTrend);
 router.get('/time-by-department', requirePermission('analytics:read'), analyticsQueryValidation, getTimeByDepartment);
 router.get('/uptime', requirePermission('analytics:read'), analyticsQueryValidation, getUptimeStats);
+// Personal stats for the signed-in user (no analytics permission required — every
+// signed-in user can read their own reports, schedules and service records).
+router.get('/user-stats', authenticateToken, analyticsQueryValidation, getUserStats);
 
 module.exports = router;

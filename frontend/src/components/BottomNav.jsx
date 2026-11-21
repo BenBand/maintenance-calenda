@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../services/auth';
 import { NAV_ITEMS } from './Navbar';
+import NotificationBadge from './NotificationBadge';
 
 /**
  * Fixed bottom tab bar. On a phone this is the primary navigation, since a
@@ -24,6 +25,7 @@ export default function BottomNav() {
     <nav className="bottom-nav" aria-label="Primary">
       {items.map((item) => {
         const isActive = location.pathname === item.to;
+        const showBadge = item.to === '/incidents';
         return (
           <Link
             className={`bottom-nav__tab${isActive ? ' bottom-nav__tab--active' : ''}`}
@@ -33,6 +35,7 @@ export default function BottomNav() {
           >
             <span className="bottom-nav__icon" aria-hidden="true">{item.icon}</span>
             <span className="bottom-nav__label">{item.shortLabel || item.label}</span>
+            {showBadge && <NotificationBadge />}
           </Link>
         );
       })}
