@@ -1,5 +1,5 @@
-import { useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useCallback, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch, readApiData } from '../services/api';
 import { useApiData } from '../hooks/useApiData';
 import { useAuth } from '../services/auth';
@@ -44,19 +44,35 @@ const STAT_GROUPS = [
 ];
 
 export default function Profile() {
-  const { can, logout } = useAuth();
+  const { user: currentUser, can, logout } = useAuth();
   const navigate = useNavigate();
+  const { userId } = useParams();
+  const isViewingOther = Boolean(userId) && String(userId) !== String(currentUser?.id);
   const canReadMaintenance = can(PERMISSIONS.MAINTENANCE_READ);
+  const isStaff = currentUser?.role === 'admin' || currentUser?.role === 'manager' || currentUser?.role === 'developer';
+
+  // Only staff can view another user's profile.
+  if (isViewingOther && !isStaff) {
+    navigate('/profile', { replace: true });
+    return null;
+  }
+
+  const statsUrl = isViewingOther ? `/analytics/users/${userId}/stats` : '/analytics/user-stats';
 
   const loadProfile = useCallback(async () => {
+    if (isViewingOther) {
+      // Fetch the target user's basic info.
+      const res = await apiFetch(`/users/${userId}`, {});
+      return readApiData(res);
+    }
     const response = await apiFetch('/auth/me', {});
     return readApiData(response);
-  }, []);
+  }, [isViewingOther, userId]);
 
   const loadStats = useCallback(async () => {
-    const response = await apiFetch('/analytics/user-stats', {});
+    const response = await apiFetch(statsUrl, {});
     return readApiData(response);
-  }, []);
+  }, [statsUrl]);
 
   const { data: user, loading: loadingUser, error: errorUser, reload: reloadUser } = useApiData(loadProfile);
   const { data: stats, loading: loadingStats, error: errorStats, reload: reloadStats } = useApiData(loadStats);
@@ -68,14 +84,38 @@ export default function Profile() {
 
   if ((loadingUser || loadingStats) && !user) return <SkeletonPage label="Loading profile..." />;
   if ((errorUser || errorStats) && !user) return <ErrorState message={errorUser || errorStats} onRetry={() => { reloadUser(); reloadStats(); }} />;
+  if (!user) return <ErrorState message="Unable to load profile" onRetry={() => { reloadUser(); reloadStats(); }} />;
+
+  const targetUsername = user?.username || currentUser?.username || 'User';
+  const targetRole = user?.role || currentUser?.role;
 
   return (
-    <div className="page page--narrow" aria-busy={loading}>
+    <div className="page page--narrow" aria-busy={loadingUser || loadingStats}>
       <header className="page-header">
         <div>
-          <h1 className="page-title">Profile</h1>
-          <p className="page-subtitle">Your account information</p>
+          <h1 className="page-title">{isViewingOther ? `${targetUsername}'s Profile` : 'Profile'}</h1>
+          <p className="page-subtitle">{isViewingOther ? 'Account information and activity summary' : 'Your account information'}</p>
         </div>
+        {!isViewingOther && canReadMaintenance && (
+          <Link className="button button--secondary" to="/users">
+            View All Users
+          </Link>
+        )}
+        {!isViewingOther && (
+          <button className="button button--danger" type="button" onClick={handleLogout}>
+            Log out
+          </button>
+        )}
+        {isViewingOther && (
+          <Link className="button button--secondary" to="/users">
+            Back to Users
+          </Link>
+        )}
+        {!isViewingOther && (
+          <Link className="button button--secondary" to={canReadMaintenance ? '/dashboard' : '/incidents'}>
+            {canReadMaintenance ? 'Back to Dashboard' : 'Back to My Incidents'}
+          </Link>
+        )}
       </header>
 
       {errorUser && <div className="inline-alert" role="alert"><span>{errorUser}</span><button className="button button--secondary button--small" type="button" onClick={reloadUser}>Retry</button></div>}
@@ -85,10 +125,11 @@ export default function Profile() {
           <h2 className="sr-only" id="profile-title">Account details</h2>
           <div className="profile-header">
             <div className="profile-avatar" aria-hidden="true">
-              {(user?.username || 'U').charAt(0).toUpperCase()}
+              {(targetUsername || 'U').charAt(0).toUpperCase()}
             </div>
-            <h3 className="profile-name">{user?.username}</h3>
-            <p className="profile-role">{user?.role}</p>
+            <h3 className="profile-name">{targetUsername}</h3>
+            <p className="profile-role">{targetRole}</p>
+            {isViewingOther && <span className="profile-badge">Viewed by admin</span>}
           </div>
           <dl className="profile-list">
             {PROFILE_FIELDS.map((field) => (
@@ -97,25 +138,31 @@ export default function Profile() {
                 <dd className="profile-value">{field.value(user || {}) || '-'}</dd>
               </div>
             ))}
+            {isViewingOther && user?.created_at && (
+              <div className="profile-item" key="member-since">
+                <dt className="profile-label">Member since</dt>
+                <dd className="profile-value">{String(user.created_at).slice(0, 10)}</dd>
+              </div>
+            )}
           </dl>
-          <div className="profile-actions">
-            <button className="button button--danger" type="button" onClick={handleLogout}>
-              Log out
-            </button>
-            {/* A user has no dashboard to return to, so the link names the one
-                screen their role actually lives in. */}
-            <Link className="button button--secondary" to={canReadMaintenance ? '/dashboard' : '/incidents'}>
-              {canReadMaintenance ? 'Back to Dashboard' : 'Back to My Incidents'}
-            </Link>
-          </div>
+          {!isViewingOther && (
+            <div className="profile-actions">
+              <button className="button button--danger" type="button" onClick={handleLogout}>
+                Log out
+              </button>
+              <Link className="button button--secondary" to={canReadMaintenance ? '/dashboard' : '/incidents'}>
+                {canReadMaintenance ? 'Back to Dashboard' : 'Back to My Incidents'}
+              </Link>
+            </div>
+          )}
         </section>
 
         {stats && (
           <section className="profile-card" aria-labelledby="user-stats-title">
             <h2 className="sr-only" id="user-stats-title">Your statistics</h2>
             <header className="profile-header">
-              <h3 id="user-stats-title">Your statistics</h3>
-              <p className="profile-role">Your activity across the system</p>
+              <h3 id="user-stats-title">{isViewingOther ? `${targetUsername}'s Activity` : 'Your statistics'}</h3>
+              <p className="profile-role">{isViewingOther ? 'Activity across the system' : 'Your activity across the system'}</p>
             </header>
             <div className="stats-grid" role="list" aria-label="User activity summary">
               {STAT_GROUPS.map((group) => (
@@ -125,7 +172,8 @@ export default function Profile() {
                   </h4>
                   <dl style={{ margin: 0, padding: 0, display: 'grid', gap: 6 }}>
                     {group.items.map((item) => {
-                      let value = stats[group.title.toLowerCase()]?.[item.key];
+                      const groupKey = group.title === 'Reports' ? 'reports' : group.title === 'Maintenance schedules' ? 'schedules' : 'services';
+                      let value = stats[groupKey]?.[item.key];
                       if (item.key === 'total_time_hours' && value != null) value = value.toFixed(1);
                       return (
                         <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-soft)', paddingBottom: 6, marginBottom: 6 }}>

@@ -15,6 +15,7 @@ const UsersPage = lazy(() => import('./pages/UsersPage'));
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
 const AssetsPage = lazy(() => import('./pages/AssetsPage'));
 const Profile = lazy(() => import('./pages/Profile'));
+const TechnicianReportPage = lazy(() => import('./pages/TechnicianReportPage'));
 const FaqPage = lazy(() => import('./pages/FaqPage'));
 
 function App() {
@@ -46,8 +47,14 @@ function App() {
           <Route path="/analytics"
             element={<PermissionGate permission="analytics:read"><AnalyticsPage /></PermissionGate>}
           />
+          <Route path="/analytics/technician-report"
+            element={<PermissionGate permission="analytics:read"><TechnicianReportPage /></PermissionGate>}
+          />
           <Route path="/users"
             element={<PermissionGate permission="user:read"><UsersPage /></PermissionGate>}
+          />
+          <Route path="/users/:userId/profile"
+            element={<PermissionGate permission="user:read"><Profile /></PermissionGate>}
           />
           <Route path="/faq"
             element={<PermissionGate permission="faq:read"><FaqPage /></PermissionGate>}

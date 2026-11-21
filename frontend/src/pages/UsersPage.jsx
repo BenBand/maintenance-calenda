@@ -177,14 +177,17 @@ export default function UsersPage() {
                   <td>{row.email}</td>
                   <td><span className={`badge badge--status-${row.role}`}>{row.role}</span></td>
                   <td>{row.created_at?.split('T')[0] || '-'}</td>
-                  {(canWrite || canDelete) && (
-                    <td>
-                      <div className="table-actions">
-                        {canWrite && <button className="button button--primary button--small" type="button" onClick={() => openEdit(row)} aria-label={`Edit user ${row.username}`}>Edit</button>}
-                        {canDelete && !isSelf && <button className="button button--danger button--small" type="button" onClick={() => handleDelete(row)} disabled={actionLoadingId === row.id} aria-label={`Delete user ${row.username}`}>Delete</button>}
-                      </div>
-                    </td>
-                  )}
+                    {(canWrite || canDelete) && (
+                      <td>
+                        <div className="table-actions">
+                          <Link className="button button--secondary button--small" to={`/users/${row.id}/profile`} aria-label={`View profile for ${row.username}`}>
+                            Profile
+                          </Link>
+                          {canWrite && <button className="button button--primary button--small" type="button" onClick={() => openEdit(row)} aria-label={`Edit user ${row.username}`}>Edit</button>}
+                          {canDelete && !isSelf && <button className="button button--danger button--small" type="button" onClick={() => handleDelete(row)} disabled={actionLoadingId === row.id} aria-label={`Delete user ${row.username}`}>Delete</button>}
+                        </div>
+                      </td>
+                    )}
                 </tr>
               );
             })}

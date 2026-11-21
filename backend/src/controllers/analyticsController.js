@@ -492,12 +492,31 @@ async function getTimeByDepartment(req, res) {
 }
 
 async function getUserStats(req, res) {
-  const userId = req.user?.id;
+  const requestingUserId = req.user?.id;
+  const requestingUserRole = req.user?.role;
+  const targetUserId = req.params.userId ? parseInt(req.params.userId, 10) : requestingUserId;
+
+  // Staff roles can view any user's stats; regular users can only view their own.
+  const isStaff = requestingUserRole === 'admin' || requestingUserRole === 'manager' || requestingUserRole === 'developer';
+  if (!isStaff && targetUserId !== requestingUserId) {
+    return res.status(403).json({ error: 'You can only view your own statistics' });
+  }
+
   const { from, to } = resolveRange(req.query);
-  const params = [userId, from.toISOString(), to.toISOString()];
+  const params = [targetUserId, from.toISOString(), to.toISOString()];
 
   try {
-    const [incidentStats, scheduleStats, serviceStats] = await Promise.all([
+    // Fetch the target user's basic info.
+    const userResult = await pool.query(
+      'SELECT id, username, email, role, created_at FROM users WHERE id = $1',
+      [targetUserId]
+    );
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const targetUser = userResult.rows[0];
+
+    const [incidentStats, scheduleStats, serviceStats, resolutionStats] = await Promise.all([
       pool.query(
         `SELECT
             count(*)                                                    AS total_reports,
@@ -531,13 +550,32 @@ async function getUserStats(req, res) {
          WHERE created_by = $1`,
         params
       ),
+      // Technician resolution counts by period (daily/weekly/monthly/yearly).
+      pool.query(
+        `SELECT
+            DATE_TRUNC('day', created_at) AS day,
+            count(*) FILTER (WHERE status = 'resolved') AS resolved,
+            count(*) FILTER (WHERE status = 'closed')   AS closed
+         FROM incidents
+         WHERE reported_by = $1 AND created_at >= $2::timestamptz AND created_at <= $3::timestamptz
+         GROUP BY DATE_TRUNC('day', created_at)
+         ORDER BY day ASC`,
+        params
+      ),
     ]);
 
     const incidents = incidentStats.rows[0];
     const schedules = scheduleStats.rows[0];
     const services = serviceStats.rows[0];
+    const resolutionTimeline = resolutionStats.rows;
 
     res.json({
+      user: {
+        id: targetUser.id,
+        username: targetUser.username,
+        email: targetUser.email,
+        role: targetUser.role,
+      },
       range: { from: from.toISOString(), to: to.toISOString() },
       reports: {
         total: Number(incidents.total_reports),
@@ -560,6 +598,11 @@ async function getUserStats(req, res) {
         total_time_minutes: Number(services.total_time_minutes),
         total_time_hours: Number((services.total_time_minutes / 60).toFixed(1)),
       },
+      resolution_timeline: resolutionTimeline.map((row) => ({
+        day: row.day,
+        resolved: Number(row.resolved),
+        closed: Number(row.closed),
+      })),
     });
   } catch (error) {
     console.error('User stats error:', error);
@@ -755,6 +798,155 @@ async function getUptimeStats(req, res) {
   }
 }
 
+/**
+ * Technician performance report. Returns, for each developer-role user, the
+ * number of incidents resolved and their average ratings, broken down by the
+ * requested period (daily, weekly, monthly, yearly). Only staff roles may
+ * access this endpoint.
+ */
+async function getTechnicianReport(req, res) {
+  const requestingUserRole = req.user?.role;
+  const isStaff = requestingUserRole === 'admin' || requestingUserRole === 'manager' || requestingUserRole === 'developer';
+  if (!isStaff) {
+    return res.status(403).json({ error: 'Staff access required' });
+  }
+
+  const { period = 'monthly', from, to } = req.query;
+  const range = resolveRange({ period, from, to });
+  const params = [range.from.toISOString(), range.to.toISOString()];
+
+  // Determine the date truncation based on the requested period.
+  let truncUnit;
+  switch (period) {
+    case 'daily': truncUnit = 'day'; break;
+    case 'weekly': truncUnit = 'week'; break;
+    case 'yearly': truncUnit = 'year'; break;
+    default: truncUnit = 'month'; break;
+  }
+
+  try {
+    // All developer-role users (technicians).
+    const techsResult = await pool.query(
+      'SELECT id, username, email FROM users WHERE role = $1 ORDER BY username',
+      ['developer']
+    );
+    const technicians = techsResult.rows;
+
+    // Incident resolutions per technician per period bucket.
+    const resolutionsResult = await pool.query(
+      `SELECT
+          acknowledged_by AS technician_id,
+          DATE_TRUNC($1, acknowledged_at) AS bucket,
+          count(*) FILTER (WHERE status = 'resolved') AS resolved,
+          count(*) FILTER (WHERE status = 'closed') AS closed
+       FROM incidents
+       WHERE acknowledged_by IS NOT NULL
+         AND acknowledged_at >= $2::timestamptz
+         AND acknowledged_at <= $3::timestamptz
+       GROUP BY acknowledged_by, DATE_TRUNC($1, acknowledged_at)
+       ORDER BY acknowledged_by, bucket ASC`,
+      [truncUnit, range.from.toISOString(), range.to.toISOString()]
+    );
+
+    // Ratings per technician per period bucket.
+    const ratingsResult = await pool.query(
+      `SELECT
+          rated_by AS technician_id,
+          DATE_TRUNC($1, created_at) AS bucket,
+          count(*) AS rating_count,
+          round(avg(rating)::numeric, 2) AS avg_rating
+       FROM incident_ratings
+       WHERE rated_by IS NOT NULL
+         AND created_at >= $2::timestamptz
+         AND created_at <= $3::timestamptz
+       GROUP BY rated_by, DATE_TRUNC($1, created_at)
+       ORDER BY rated_by, bucket ASC`,
+      [truncUnit, range.from.toISOString(), range.to.toISOString()]
+    );
+
+    // Index resolutions and ratings by (technician_id, bucket).
+    const resolutionByTech = new Map();
+    resolutionsResult.rows.forEach((row) => {
+      const key = `${row.technician_id}|${row.bucket}`;
+      resolutionByTech.set(key, {
+        resolved: Number(row.resolved),
+        closed: Number(row.closed),
+      });
+    });
+
+    const ratingByTech = new Map();
+    ratingsResult.rows.forEach((row) => {
+      const key = `${row.technician_id}|${row.bucket}`;
+      ratingByTech.set(key, {
+        rating_count: Number(row.rating_count),
+        avg_rating: Number(row.avg_rating),
+      });
+    });
+
+    // Build the report: one entry per technician per period bucket.
+    const report = technicians.map((tech) => {
+      const buckets = [];
+      const allBuckets = new Set();
+      resolutionsResult.rows
+        .filter((r) => String(r.technician_id) === String(tech.id))
+        .forEach((r) => allBuckets.add(String(r.bucket)));
+      ratingsResult.rows
+        .filter((r) => String(r.technician_id) === String(tech.id))
+        .forEach((r) => allBuckets.add(String(r.bucket)));
+
+      allBuckets.forEach((bucket) => {
+        const res = resolutionByTech.get(`${tech.id}|${bucket}`) || { resolved: 0, closed: 0 };
+        const rat = ratingByTech.get(`${tech.id}|${bucket}`) || { rating_count: 0, avg_rating: 0 };
+        buckets.push({
+          period: bucket,
+          resolved: res.resolved,
+          closed: res.closed,
+          total_resolved: res.resolved + res.closed,
+          rating_count: rat.rating_count,
+          avg_rating: rat.avg_rating,
+        });
+      });
+
+      buckets.sort((a, b) => String(a.period).localeCompare(String(b.period)));
+
+      const totals = buckets.reduce((acc, b) => ({
+        resolved: acc.resolved + b.resolved,
+        closed: acc.closed + b.closed,
+        rating_count: acc.rating_count + b.rating_count,
+      }), { resolved: 0, closed: 0, rating_count: 0 });
+
+      const allRatings = ratingsResult.rows
+        .filter((r) => String(r.technician_id) === String(tech.id));
+      const overallAvgRating = allRatings.length > 0
+        ? round1(allRatings.reduce((sum, r) => sum + Number(r.avg_rating), 0) / allRatings.length)
+        : 0;
+
+      return {
+        technician_id: tech.id,
+        technician: tech.username,
+        email: tech.email,
+        buckets,
+        totals: {
+          resolved: totals.resolved,
+          closed: totals.closed,
+          total_resolved: totals.resolved + totals.closed,
+          rating_count: totals.rating_count,
+          avg_rating: overallAvgRating,
+        },
+      };
+    });
+
+    res.json({
+      period,
+      range: { from: range.from.toISOString(), to: range.to.toISOString(), label: range.label },
+      technicians: report,
+    });
+  } catch (error) {
+    console.error('Technician report error:', error);
+    res.status(500).json({ error: 'Failed to build technician report' });
+  }
+}
+
 module.exports = {
   getOverview,
   getMaintenanceFrequency,
@@ -763,4 +955,5 @@ module.exports = {
   getTimeByDepartment,
   getUptimeStats,
   getUserStats,
+  getTechnicianReport,
 };

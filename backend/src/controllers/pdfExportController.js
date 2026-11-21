@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const pool = require('../config/database');
 const { logMaintenanceAudit } = require('../middleware/audit');
+const { resolveRange } = require('../utils/periods');
 
 const WATERMARK_PATH = path.join(__dirname, '../../frontend/public/Background_watermark/background.jpeg');
 
@@ -648,4 +649,153 @@ async function exportIncidentPDF(req, res) {
   }
 }
 
-module.exports = { exportServiceRecordPDF, exportCompletionCertificatePDF, exportComplianceReportPDF, exportIncidentPDF };
+async function exportTechnicianReportPDF(req, res) {
+  const userId = req.user.id;
+  const { period = 'monthly', from, to } = req.query;
+
+  const range = resolveRange ? resolveRange({ period, from, to }) : null;
+  const fromDate = range ? range.from.toISOString() : (from || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString());
+  const toDate = range ? range.to.toISOString() : (to || new Date().toISOString());
+
+  let truncUnit;
+  switch (period) {
+    case 'daily': truncUnit = 'day'; break;
+    case 'weekly': truncUnit = 'week'; break;
+    case 'yearly': truncUnit = 'year'; break;
+    default: truncUnit = 'month'; break;
+  }
+
+  try {
+    const techsResult = await pool.query(
+      'SELECT id, username, email FROM users WHERE role = $1 ORDER BY username',
+      ['developer']
+    );
+    const technicians = techsResult.rows;
+
+    const resolutionsResult = await pool.query(
+      `SELECT
+          acknowledged_by AS technician_id,
+          DATE_TRUNC($1, acknowledged_at) AS bucket,
+          count(*) FILTER (WHERE status = 'resolved') AS resolved,
+          count(*) FILTER (WHERE status = 'closed') AS closed
+       FROM incidents
+       WHERE acknowledged_by IS NOT NULL
+         AND acknowledged_at >= $2::timestamptz
+         AND acknowledged_at <= $3::timestamptz
+       GROUP BY acknowledged_by, DATE_TRUNC($1, acknowledged_at)
+       ORDER BY acknowledged_by, bucket ASC`,
+      [truncUnit, fromDate, toDate]
+    );
+
+    const ratingsResult = await pool.query(
+      `SELECT
+          rated_by AS technician_id,
+          DATE_TRUNC($1, created_at) AS bucket,
+          count(*) AS rating_count,
+          round(avg(rating)::numeric, 2) AS avg_rating
+       FROM incident_ratings
+       WHERE rated_by IS NOT NULL
+         AND created_at >= $2::timestamptz
+         AND created_at <= $3::timestamptz
+       GROUP BY rated_by, DATE_TRUNC($1, created_at)
+       ORDER BY rated_by, bucket ASC`,
+      [truncUnit, fromDate, toDate]
+    );
+
+    const resolutionByTech = new Map();
+    resolutionsResult.rows.forEach((row) => {
+      const key = `${row.technician_id}|${row.bucket}`;
+      resolutionByTech.set(key, {
+        resolved: Number(row.resolved),
+        closed: Number(row.closed),
+      });
+    });
+
+    const ratingByTech = new Map();
+    ratingsResult.rows.forEach((row) => {
+      const key = `${row.technician_id}|${row.bucket}`;
+      ratingByTech.set(key, {
+        rating_count: Number(row.rating_count),
+        avg_rating: Number(row.avg_rating),
+      });
+    });
+
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="technician-report-${period}-${Date.now()}.pdf"`);
+
+    doc.pipe(res);
+
+    // Watermark
+    const WATERMARK_PATH = path.join(__dirname, '../../frontend/public/Background_watermark/background.jpeg');
+    if (fs.existsSync(WATERMARK_PATH)) {
+      const pageWidth = doc.page.width;
+      const pageHeight = doc.page.height;
+      const watermarkWidth = 300;
+      const watermarkHeight = 300;
+      const x = (pageWidth - watermarkWidth) / 2;
+      const y = (pageHeight - watermarkHeight) / 2;
+      doc.save();
+      doc.opacity(0.1);
+      doc.image(WATERMARK_PATH, x, y, { width: watermarkWidth, height: watermarkHeight });
+      doc.restore();
+    }
+
+    doc.fontSize(20).fillColor('#1f2937').text('Technician Performance Report', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(12).fillColor('#4b5563').text(
+      `Period: ${period.charAt(0).toUpperCase() + period.slice(1)} · ${new Date(fromDate).toLocaleDateString()} to ${new Date(toDate).toLocaleDateString()}`,
+      { align: 'center' }
+    );
+    doc.moveDown(1);
+
+    // Summary table
+    const colWidths = [120, 80, 80, 90, 70, 80];
+    const tableTop = doc.y;
+
+    doc.fontSize(10).fillColor('#1f2937');
+    const headers = ['Technician', 'Resolved', 'Closed', 'Total', 'Ratings', 'Avg Rating'];
+    let x = 50;
+    headers.forEach((h, i) => {
+      doc.text(h, x, doc.y, { width: colWidths[i], align: 'left', bold: true });
+      x += colWidths[i];
+    });
+    doc.moveDown(0.3);
+
+    technicians.forEach((tech) => {
+      const techResolutions = resolutionsResult.rows.filter((r) => String(r.technician_id) === String(tech.id));
+      const techRatings = ratingsResult.rows.filter((r) => String(r.technician_id) === String(tech.id));
+
+      const totalResolved = techResolutions.reduce((sum, r) => sum + Number(r.resolved), 0);
+      const totalClosed = techResolutions.reduce((sum, r) => sum + Number(r.closed), 0);
+      const totalRatings = techRatings.reduce((sum, r) => sum + Number(r.rating_count), 0);
+      const avgRating = techRatings.length > 0
+        ? (techRatings.reduce((sum, r) => sum + Number(r.avg_rating), 0) / techRatings.length).toFixed(1)
+        : '0.0';
+
+      x = 50;
+      const values = [tech.username, String(totalResolved), String(totalClosed), String(totalResolved + totalClosed), String(totalRatings), avgRating];
+      values.forEach((v, i) => {
+        doc.text(v, x, doc.y, { width: colWidths[i], align: 'left' });
+        x += colWidths[i];
+      });
+      doc.moveDown(0.3);
+    });
+
+    doc.moveDown(0.5);
+    doc.fontSize(8).fillColor('#9ca3af').text(
+      'Generated by Maintenance Calendar - Lusaka City Council IT Department',
+      { align: 'center' }
+    );
+
+    doc.end();
+
+    await logMaintenanceAudit(req, 'EXPORT_TECHNICIAN_REPORT_PDF', 'report', null, { format: 'pdf', period }, userId);
+  } catch (error) {
+    console.error('Export technician report PDF error:', error);
+    res.status(500).json({ error: 'Failed to generate technician report PDF' });
+  }
+}
+
+module.exports = { exportServiceRecordPDF, exportCompletionCertificatePDF, exportComplianceReportPDF, exportIncidentPDF, exportTechnicianReportPDF };

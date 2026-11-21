@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { to: '/incidents', label: 'Incidents', shortLabel: 'Issues', icon: '!', permission: PERMISSIONS.INCIDENT_READ, notificationKey: 'incidents' },
   { to: '/faq', label: 'Help', shortLabel: 'Help', icon: '?', permission: PERMISSIONS.FAQ_READ, notificationKey: null },
   { to: '/users', label: 'Users', shortLabel: 'Users', icon: '☰', permission: PERMISSIONS.USER_READ, notificationKey: null },
+  { to: '/analytics/technician-report', label: 'Tech Report', shortLabel: 'Tech Report', icon: '📊', permission: PERMISSIONS.ANALYTICS_READ, notificationKey: null },
 ];
 
 export { NAV_ITEMS };
