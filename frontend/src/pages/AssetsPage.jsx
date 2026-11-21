@@ -282,7 +282,7 @@ export default function AssetsPage() {
       stats: await readApiData(statsRes),
       departments: await readApiArray(departmentsRes),
     };
-  }, [search, statusFilter, typeFilter, departmentFilter, warrantyFilter, page]);
+  }, [search, statusFilter, typeFilter, departmentFilter, page]);
 
   const { data, loading, error, reload } = useApiData(loadAssets);
   const assets = data?.assets || [];
