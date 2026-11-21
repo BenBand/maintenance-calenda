@@ -33,6 +33,7 @@ export default function CalendarPage() {
   const [filterAssetType, setFilterAssetType] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterTechnician, setFilterTechnician] = useState('');
+  const [showDevicesPanel, setShowDevicesPanel] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -54,11 +55,13 @@ export default function CalendarPage() {
     });
     if (filterDept) params.set('department', filterDept);
 
-    const [schedulesRes, departmentsRes, windowsRes, availabilityRes] = await Promise.all([
+    const [schedulesRes, departmentsRes, windowsRes, availabilityRes, assetsRes, techsRes] = await Promise.all([
       apiFetch(`/maintenance?${params.toString()}`, {}),
       apiFetch('/maintenance/departments', {}),
       apiFetch(`/downtime/windows?from=${encodeURIComponent(range.start)}&to=${encodeURIComponent(range.end)}`, {}),
       apiFetch(`/downtime/availability?date=${encodeURIComponent(toLocalDateKey(anchor))}${filterDept ? `&department=${encodeURIComponent(filterDept)}` : ''}`, {}),
+      apiFetch('/assets', {}).catch(() => null),
+      apiFetch('/users?role=developer', {}).catch(() => null),
     ]);
 
     return {
@@ -67,6 +70,8 @@ export default function CalendarPage() {
       departments: await readApiArray(departmentsRes),
       downtimeWindows: await readApiArray(windowsRes),
       availability: availabilityRes.ok ? await availabilityRes.json() : null,
+      devices: assetsRes ? await readApiArray(assetsRes) : [],
+      technicians: techsRes ? await readApiArray(techsRes) : [],
     };
   }, [range, filterDept, anchor]);
 
@@ -88,10 +93,7 @@ export default function CalendarPage() {
     return true;
   }), [allSchedules, filterDept, filterAssetType, filterStatus, filterTechnician]);
 
-  const technicians = useMemo(() => {
-    const set = new Set(allSchedules.map((schedule) => schedule.technician).filter(Boolean));
-    return [...set].sort();
-  }, [allSchedules]);
+  const technicians = useMemo(() => technicianUsers.map((t) => t.username).sort(), [technicianUsers]);
 
   const assetTypes = useMemo(() => {
     const set = new Set(allSchedules.map((schedule) => schedule.asset_type).filter(Boolean));
@@ -110,6 +112,23 @@ export default function CalendarPage() {
   const downtimeWindows = data?.downtimeWindows || [];
   const technicianLoad = data?.availability?.technician_load || [];
   const departments = data?.departments || [];
+  const devices = data?.devices || [];
+  const technicianUsers = data?.technicians || [];
+
+  // Group devices by department/unit so users can see what devices belong to
+  // each unit across the system.
+  const devicesByDept = useMemo(() => {
+    const grouped = new Map();
+    (devices || []).forEach((device) => {
+      const dept = device.department || 'Unassigned';
+      if (!grouped.has(dept)) grouped.set(dept, []);
+      grouped.get(dept).push(device);
+    });
+    return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [devices]);
+
+  // Technician filter options come from the actual developer-role users so all
+  // six seeded technicians appear even before any schedules exist.
 
   const handleSlotClick = (schedule) => {
     setServiceSchedule(schedule);
@@ -220,6 +239,14 @@ export default function CalendarPage() {
               + Add Schedule
             </button>
           )}
+          <button
+            className="button button--secondary"
+            type="button"
+            onClick={() => setShowDevicesPanel(!showDevicesPanel)}
+            aria-expanded={showDevicesPanel}
+          >
+            {showDevicesPanel ? 'Hide Devices' : 'Show Devices'}
+          </button>
         </div>
       </header>
 
@@ -420,6 +447,30 @@ export default function CalendarPage() {
             loading={formLoading}
           />
         </Modal>
+      )}
+
+      {showDevicesPanel && devicesByDept.length > 0 && (
+        <section className="devices-panel" aria-labelledby="devices-title">
+          <h2 className="section-title" id="devices-title">Devices by Department</h2>
+          <p className="page-subtitle">All registered assets across the system, grouped by unit.</p>
+          <div className="devices-grid">
+            {devicesByDept.map(([dept, deptDevices]) => (
+              <div key={dept} className="device-dept-card">
+                <h3 className="device-dept-title">{dept}</h3>
+                <div className="device-list">
+                  {deptDevices.map((device) => (
+                    <div key={device.id} className="device-item">
+                      <span className="device-name">{device.asset_identifier || device.name || 'Unnamed device'}</span>
+                      <span className="device-type">{humanizeKey(device.asset_type || 'device')}</span>
+                      {device.room && <span className="device-room">{device.room}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          {devices.length === 0 && <p className="text-muted">No devices registered yet.</p>}
+        </section>
       )}
     </div>
   );

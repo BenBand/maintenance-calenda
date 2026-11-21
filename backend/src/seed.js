@@ -110,7 +110,16 @@ async function seed() {
   const constraint = await assertRoleConstraintReady();
   console.log(`  role constraint: ${constraint}\n`);
 
-  const accounts = [ROLES.ADMIN, ROLES.MANAGER, ROLES.DEVELOPER, ROLES.USER].map(readAccount);
+  const accounts = [
+  ROLES.ADMIN,
+  ROLES.MANAGER,
+  ROLES.DEVELOPER,
+  ROLES.USER,
+  // Six technician accounts for the admin view (incident assignment, calendar
+  // technician filter, etc.). These are all the `developer` role so they can
+  // action maintenance work and be assigned to incidents.
+  'TECH1', 'TECH2', 'TECH3', 'TECH4', 'TECH5', 'TECH6',
+].map(readAccount);
 
   const problems = accounts.flatMap(validateAccount);
   if (problems.length > 0) {

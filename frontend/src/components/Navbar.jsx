@@ -2,17 +2,18 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../services/auth';
 import { PERMISSIONS } from '../services/permissions';
+import { useNotifications } from '../services/notifications';
 import NotificationBadge from './NotificationBadge';
 
 const NAV_ITEMS = [
-  { to: '/dashboard', label: 'Dashboard', shortLabel: 'Home', icon: '.dk', permission: PERMISSIONS.MAINTENANCE_READ },
-  { to: '/calendar', label: 'Calendar', shortLabel: 'Slots', icon: '▦', permission: PERMISSIONS.MAINTENANCE_READ },
-  { to: '/assets', label: 'Assets', shortLabel: 'Assets', icon: '◧', permission: PERMISSIONS.ASSET_READ },
-  { to: '/analytics', label: 'Analytics', shortLabel: 'Reports', icon: '◨', permission: PERMISSIONS.ANALYTICS_READ },
-  { to: '/records', label: 'Records', shortLabel: 'Records', icon: '✓', permission: PERMISSIONS.SERVICE_READ },
-  { to: '/incidents', label: 'Incidents', shortLabel: 'Issues', icon: '!', permission: PERMISSIONS.INCIDENT_READ },
-  { to: '/faq', label: 'Help', shortLabel: 'Help', icon: '?', permission: PERMISSIONS.FAQ_READ },
-  { to: '/users', label: 'Users', shortLabel: 'Users', icon: '☰', permission: PERMISSIONS.USER_READ },
+  { to: '/dashboard', label: 'Dashboard', shortLabel: 'Home', icon: '.dk', permission: PERMISSIONS.MAINTENANCE_READ, notificationKey: null },
+  { to: '/calendar', label: 'Calendar', shortLabel: 'Slots', icon: '▦', permission: PERMISSIONS.MAINTENANCE_READ, notificationKey: null },
+  { to: '/assets', label: 'Assets', shortLabel: 'Assets', icon: '◧', permission: PERMISSIONS.ASSET_READ, notificationKey: null },
+  { to: '/analytics', label: 'Analytics', shortLabel: 'Reports', icon: '◨', permission: PERMISSIONS.ANALYTICS_READ, notificationKey: 'notices' },
+  { to: '/records', label: 'Records', shortLabel: 'Records', icon: '✓', permission: PERMISSIONS.SERVICE_READ, notificationKey: null },
+  { to: '/incidents', label: 'Incidents', shortLabel: 'Issues', icon: '!', permission: PERMISSIONS.INCIDENT_READ, notificationKey: 'incidents' },
+  { to: '/faq', label: 'Help', shortLabel: 'Help', icon: '?', permission: PERMISSIONS.FAQ_READ, notificationKey: null },
+  { to: '/users', label: 'Users', shortLabel: 'Users', icon: '☰', permission: PERMISSIONS.USER_READ, notificationKey: null },
 ];
 
 export { NAV_ITEMS };
@@ -20,6 +21,7 @@ export { NAV_ITEMS };
 export default function Navbar() {
   const { user, can } = useAuth();
   const location = useLocation();
+  const notificationCounts = useNotifications();
   const [menuOpen, setMenuOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(null);
 
@@ -60,7 +62,6 @@ export default function Navbar() {
               Install app
             </button>
           )}
-          <NotificationBadge />
           <button
             className="navbar__menu-button"
             type="button"
@@ -77,6 +78,7 @@ export default function Navbar() {
           {NAV_ITEMS.map((item, index) => {
             if (item.permission && !can(item.permission)) return null;
             const isActive = location.pathname === item.to;
+            const notificationCount = item.notificationKey ? notificationCounts[item.notificationKey] : 0;
             return (
               <Link
                 className={`navbar__link${isActive ? ' navbar__link--active' : ''}`}
@@ -86,6 +88,7 @@ export default function Navbar() {
                 aria-current={isActive ? 'page' : undefined}
               >
                 {item.label}
+                {notificationCount > 0 && <NotificationBadge count={notificationCount} />}
               </Link>
             );
           })}
