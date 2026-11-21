@@ -57,14 +57,17 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Only a good response may become the offline shell. A 404 or a 503
-          // seen during a transient outage would otherwise be remembered and
-          // replayed as the app on every later refresh.
+          // Cache a successful shell response so it can be replayed when the
+          // server is unreachable or returns a non-ok status (e.g. 404 on a
+          // client route that the Express SPA fallback hasn't caught yet).
           if (response.ok) {
             const copy = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(OFFLINE_FALLBACK, copy));
+            return response;
           }
-          return response;
+          // Server returned non-ok (e.g. 404). Serve the cached shell instead
+          // so React Router can take over on the client side.
+          return caches.match(OFFLINE_FALLBACK).then((cached) => cached || response);
         })
         .catch(() =>
           caches.match(OFFLINE_FALLBACK).then((cached) => {
