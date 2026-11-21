@@ -93,6 +93,8 @@ export default function CalendarPage() {
     return true;
   }), [allSchedules, filterDept, filterAssetType, filterStatus, filterTechnician]);
 
+  const technicianUsers = data?.technicians || [];
+
   const technicians = useMemo(() => technicianUsers.map((t) => t.username).sort(), [technicianUsers]);
 
   const assetTypes = useMemo(() => {
@@ -113,7 +115,6 @@ export default function CalendarPage() {
   const technicianLoad = data?.availability?.technician_load || [];
   const departments = data?.departments || [];
   const devices = data?.devices || [];
-  const technicianUsers = data?.technicians || [];
 
   // Group devices by department/unit so users can see what devices belong to
   // each unit across the system.
